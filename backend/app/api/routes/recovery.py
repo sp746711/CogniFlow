@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
-from app.models.developer import Developer
-from app.models.event import Event
-from app.services.recovery_analyzer import RecoveryAnalyzer
+from app.services.event_processor import EventProcessor
 
 
 router = APIRouter(
@@ -26,62 +23,50 @@ def get_recovery(
     """
     Return recovery-time analytics from persisted CogniFlow events.
 
-    If developer_id is provided, only that developer's activity is
-    analyzed. Otherwise, all persisted activity is analyzed.
+    If developer_id is provided, only that developer is processed.
+    Otherwise, all developers are processed.
+
+    EventProcessor coordinates the complete analytics pipeline so
+    recovery calculations remain consistent with flow sessions,
+    interruptions, context switches, and flow scores.
     """
 
-    # ----------------------------------------------------------
-    # Validate developer
-    # ----------------------------------------------------------
+    processor = EventProcessor(db)
+
+    # ==========================================================
+    # SINGLE DEVELOPER
+    # ==========================================================
 
     if developer_id is not None:
-        developer = db.scalar(
-            select(Developer).where(
-                Developer.id == developer_id
+        try:
+            result = processor.process_developer(
+                developer_id=developer_id,
+                persist=True,
             )
-        )
 
-        if developer is None:
+        except ValueError as exc:
             raise HTTPException(
                 status_code=404,
-                detail=f"Developer {developer_id} not found.",
-            )
+                detail=str(exc),
+            ) from exc
 
-    # ----------------------------------------------------------
-    # Load events
-    # ----------------------------------------------------------
-
-    query = select(Event).order_by(Event.timestamp)
-
-    if developer_id is not None:
-        query = query.where(
-            Event.developer_id == developer_id
-        )
-
-    events = list(
-        db.scalars(query).all()
-    )
-
-    # ----------------------------------------------------------
-    # Empty data
-    # ----------------------------------------------------------
-
-    if not events:
         return {
             "developer_id": developer_id,
-            "events_analyzed": 0,
-            "recovery": None,
-            "message": "No activity events found.",
+            "events_analyzed": result["event_count"],
+            "recovery_time_seconds": result[
+                "recovery_time_seconds"
+            ],
+            "message": "Recovery analysis completed.",
         }
 
-    # ----------------------------------------------------------
-    # Analyze recovery
-    # ----------------------------------------------------------
-
-    analyzer = RecoveryAnalyzer()
+    # ==========================================================
+    # ALL DEVELOPERS
+    # ==========================================================
 
     try:
-        result = analyzer.analyze(events)
+        results = processor.process_all_developers(
+            persist=True,
+        )
 
     except ValueError as exc:
         raise HTTPException(
@@ -89,19 +74,17 @@ def get_recovery(
             detail=str(exc),
         ) from exc
 
-    # ----------------------------------------------------------
-    # Return result
-    # ----------------------------------------------------------
-
-    if isinstance(result, dict):
-        return {
-            "developer_id": developer_id,
-            "events_analyzed": len(events),
-            "recovery": result,
-        }
-
     return {
-        "developer_id": developer_id,
-        "events_analyzed": len(events),
-        "recovery": result,
+        "developer_count": len(results),
+        "developers": [
+            {
+                "developer_id": result["developer_id"],
+                "events_analyzed": result["event_count"],
+                "recovery_time_seconds": result[
+                    "recovery_time_seconds"
+                ],
+            }
+            for result in results
+        ],
+        "message": "Recovery analysis completed.",
     }

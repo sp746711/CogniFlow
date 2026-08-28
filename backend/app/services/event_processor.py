@@ -1,6 +1,7 @@
-"""Event processing service for CogniFlow.
+"""
+Event processing service for CogniFlow.
 
-This service coordinates the analytics pipeline:
+This service coordinates the complete analytics pipeline:
 
 Events
     -> context switches
@@ -11,6 +12,9 @@ Events
     -> persisted metrics
 
 The project uses simulated IDE, Slack, Jira and GitHub events only.
+
+Raw events are never deleted. Derived analytics are recalculated
+from the current event timeline for each developer.
 """
 
 from __future__ import annotations
@@ -47,16 +51,43 @@ class EventProcessor:
         recovery_analyzer: RecoveryAnalyzer | None = None,
         score_calculator: FlowScoreCalculator | None = None,
     ) -> None:
+        """Initialize the central analytics processor."""
+
         self.session = session
-        self.flow_analyzer = flow_analyzer or FlowAnalyzer()
+
+        self.flow_analyzer = (
+            flow_analyzer
+            if flow_analyzer is not None
+            else FlowAnalyzer()
+        )
+
         self.interruption_analyzer = (
-            interruption_analyzer or InterruptionAnalyzer()
+            interruption_analyzer
+            if interruption_analyzer is not None
+            else InterruptionAnalyzer()
         )
+
         self.context_switch_analyzer = (
-            context_switch_analyzer or ContextSwitchAnalyzer()
+            context_switch_analyzer
+            if context_switch_analyzer is not None
+            else ContextSwitchAnalyzer()
         )
-        self.recovery_analyzer = recovery_analyzer or RecoveryAnalyzer()
-        self.score_calculator = score_calculator or FlowScoreCalculator()
+
+        self.recovery_analyzer = (
+            recovery_analyzer
+            if recovery_analyzer is not None
+            else RecoveryAnalyzer()
+        )
+
+        self.score_calculator = (
+            score_calculator
+            if score_calculator is not None
+            else FlowScoreCalculator()
+        )
+
+    # ==========================================================
+    # EVENT LOADING
+    # ==========================================================
 
     def get_events(
         self,
@@ -70,16 +101,29 @@ class EventProcessor:
         statement = (
             select(Event)
             .where(Event.developer_id == developer_id)
-            .order_by(Event.timestamp.asc(), Event.id.asc())
+            .order_by(
+                Event.timestamp.asc(),
+                Event.id.asc(),
+            )
         )
 
         if start_time is not None:
-            statement = statement.where(Event.timestamp >= start_time)
+            statement = statement.where(
+                Event.timestamp >= start_time
+            )
 
         if end_time is not None:
-            statement = statement.where(Event.timestamp <= end_time)
+            statement = statement.where(
+                Event.timestamp <= end_time
+            )
 
-        return list(self.session.scalars(statement).all())
+        return list(
+            self.session.scalars(statement).all()
+        )
+
+    # ==========================================================
+    # SINGLE DEVELOPER PROCESSING
+    # ==========================================================
 
     def process_developer(
         self,
@@ -89,12 +133,29 @@ class EventProcessor:
         end_time: datetime | None = None,
         persist: bool = True,
     ) -> dict:
-        """Process one developer's complete unified activity timeline."""
+        """
+        Process one developer's complete activity timeline.
 
-        developer = self.session.get(Developer, developer_id)
+        Pipeline:
+
+        Events
+            -> Flow
+            -> Interruptions
+            -> Context Switching
+            -> Recovery
+            -> Flow Score
+            -> Persistence
+        """
+
+        developer = self.session.get(
+            Developer,
+            developer_id,
+        )
 
         if developer is None:
-            raise ValueError(f"Developer {developer_id} was not found.")
+            raise ValueError(
+                f"Developer {developer_id} was not found."
+            )
 
         events = self.get_events(
             developer_id,
@@ -102,28 +163,85 @@ class EventProcessor:
             end_time=end_time,
         )
 
+        # ------------------------------------------------------
+        # No activity
+        # ------------------------------------------------------
+
         if not events:
+            empty_metrics = {
+                "total_events": 0.0,
+                "focused_time_seconds": 0.0,
+                "flow_session_count": 0.0,
+                "average_flow_seconds": 0.0,
+                "interruption_count": 0.0,
+                "context_switch_count": 0.0,
+                "recovery_time_seconds": 0.0,
+                "flow_score": 0.0,
+            }
+
+            if persist:
+                self._clear_derived_analytics(
+                    developer_id
+                )
+                self._persist_metrics(
+                    developer_id=developer_id,
+                    score=empty_metrics,
+                )
+
             return {
                 "developer_id": developer_id,
                 "event_count": 0,
                 "flow_sessions": 0,
                 "interruptions": 0,
                 "context_switches": 0,
-                "recovery_time_seconds": 0,
+                "recovery_time_seconds": 0.0,
                 "flow_score": 0.0,
+                "metrics": empty_metrics,
             }
 
-        flow_sessions = self.flow_analyzer.analyze(events)
+        # ------------------------------------------------------
+        # Flow analysis
+        # ------------------------------------------------------
 
-        interruptions = self.interruption_analyzer.analyze(events)
-
-        context_switches = self.context_switch_analyzer.analyze(events)
-
-        recovery_times = self.recovery_analyzer.analyze(
-            events,
-            interruptions,
-            context_switches,
+        flow_sessions = self.flow_analyzer.analyze(
+            events
         )
+
+        # ------------------------------------------------------
+        # Interruption analysis
+        # ------------------------------------------------------
+
+        interruptions = (
+            self.interruption_analyzer.analyze(
+                events
+            )
+        )
+
+        # ------------------------------------------------------
+        # Context-switch analysis
+        # ------------------------------------------------------
+
+        context_switches = (
+            self.context_switch_analyzer.analyze(
+                events
+            )
+        )
+
+        # ------------------------------------------------------
+        # Recovery analysis
+        # ------------------------------------------------------
+
+        recovery_times = (
+            self.recovery_analyzer.analyze(
+                events,
+                interruptions,
+                context_switches,
+            )
+        )
+
+        # ------------------------------------------------------
+        # Flow score
+        # ------------------------------------------------------
 
         score = self.score_calculator.calculate(
             events=events,
@@ -132,6 +250,10 @@ class EventProcessor:
             context_switches=context_switches,
             recovery_times=recovery_times,
         )
+
+        # ------------------------------------------------------
+        # Persist derived analytics
+        # ------------------------------------------------------
 
         if persist:
             self._persist_analysis(
@@ -142,16 +264,28 @@ class EventProcessor:
                 score=score,
             )
 
+        # ------------------------------------------------------
+        # Return unified result
+        # ------------------------------------------------------
+
         return {
             "developer_id": developer_id,
             "event_count": len(events),
             "flow_sessions": len(flow_sessions),
             "interruptions": len(interruptions),
             "context_switches": len(context_switches),
-            "recovery_time_seconds": sum(recovery_times),
-            "flow_score": score["flow_score"],
+            "recovery_time_seconds": sum(
+                recovery_times
+            ),
+            "flow_score": float(
+                score["flow_score"]
+            ),
             "metrics": score,
         }
+
+    # ==========================================================
+    # ALL DEVELOPERS
+    # ==========================================================
 
     def process_all_developers(
         self,
@@ -160,9 +294,16 @@ class EventProcessor:
         end_time: datetime | None = None,
         persist: bool = True,
     ) -> list[dict]:
-        """Process every developer with generated events."""
+        """Process every developer in the database."""
 
-        developers = list(self.session.scalars(select(Developer)).all())
+        statement = (
+            select(Developer)
+            .order_by(Developer.id)
+        )
+
+        developers = list(
+            self.session.scalars(statement).all()
+        )
 
         results: list[dict] = []
 
@@ -173,12 +314,17 @@ class EventProcessor:
                 end_time=end_time,
                 persist=persist,
             )
+
             results.append(result)
 
         if persist:
             self.session.commit()
 
         return results
+
+    # ==========================================================
+    # PERSIST ANALYSIS
+    # ==========================================================
 
     def _persist_analysis(
         self,
@@ -189,37 +335,21 @@ class EventProcessor:
         context_switches: Iterable[dict],
         score: dict,
     ) -> None:
-        """Persist calculated analytics for one developer.
+        """
+        Replace derived analytics for one developer.
 
-        Existing derived analytics for the same developer are removed first.
-        Raw events and source data are never removed.
+        Raw Event records are never deleted.
         """
 
-        self.session.execute(
-            delete(FlowSession).where(
-                FlowSession.developer_id == developer_id
-            )
-        )
-
-        self.session.execute(
-            delete(Interruption).where(
-                Interruption.developer_id == developer_id
-            )
-        )
-
-        self.session.execute(
-            delete(ContextSwitch).where(
-                ContextSwitch.developer_id == developer_id
-            )
-        )
-
-        self.session.execute(
-            delete(Metric).where(
-                Metric.developer_id == developer_id
-            )
+        self._clear_derived_analytics(
+            developer_id
         )
 
         self.session.flush()
+
+        # ------------------------------------------------------
+        # Flow sessions
+        # ------------------------------------------------------
 
         for item in flow_sessions:
             self.session.add(
@@ -227,11 +357,20 @@ class EventProcessor:
                     developer_id=developer_id,
                     start_time=item["start_time"],
                     end_time=item.get("end_time"),
-                    duration_seconds=item.get("duration_seconds"),
-                    focused_event_count=item.get("focused_event_count", 0),
+                    duration_seconds=item.get(
+                        "duration_seconds"
+                    ),
+                    focused_event_count=item.get(
+                        "focused_event_count",
+                        0,
+                    ),
                     notes=item.get("notes"),
                 )
             )
+
+        # ------------------------------------------------------
+        # Interruptions
+        # ------------------------------------------------------
 
         for item in interruptions:
             self.session.add(
@@ -239,36 +378,159 @@ class EventProcessor:
                     developer_id=developer_id,
                     event_id=item.get("event_id"),
                     timestamp=item["timestamp"],
-                    interruption_type=item["interruption_type"],
-                    duration_seconds=item.get("duration_seconds"),
-                    description=item.get("description"),
+                    interruption_type=item[
+                        "interruption_type"
+                    ],
+                    duration_seconds=item.get(
+                        "duration_seconds"
+                    ),
+                    description=item.get(
+                        "description"
+                    ),
                 )
             )
+
+        # ------------------------------------------------------
+        # Context switches
+        # ------------------------------------------------------
 
         for item in context_switches:
             self.session.add(
                 ContextSwitch(
                     developer_id=developer_id,
-                    from_context=item["from_context"],
-                    to_context=item["to_context"],
+                    from_context=item[
+                        "from_context"
+                    ],
+                    to_context=item[
+                        "to_context"
+                    ],
                     timestamp=item["timestamp"],
-                    from_event_id=item.get("from_event_id"),
-                    to_event_id=item.get("to_event_id"),
-                    duration_seconds=item.get("duration_seconds"),
+                    from_event_id=item.get(
+                        "from_event_id"
+                    ),
+                    to_event_id=item.get(
+                        "to_event_id"
+                    ),
+                    duration_seconds=item.get(
+                        "duration_seconds"
+                    ),
                 )
             )
+
+        # ------------------------------------------------------
+        # Metrics
+        # ------------------------------------------------------
+
+        self._persist_metrics(
+            developer_id=developer_id,
+            score=score,
+        )
+
+        self.session.flush()
+
+    # ==========================================================
+    # CLEAR DERIVED ANALYTICS
+    # ==========================================================
+
+    def _clear_derived_analytics(
+        self,
+        developer_id: int,
+    ) -> None:
+        """
+        Remove previously calculated analytics.
+
+        Only derived data is removed.
+        Raw Event records remain untouched.
+        """
+
+        self.session.execute(
+            delete(FlowSession).where(
+                FlowSession.developer_id
+                == developer_id
+            )
+        )
+
+        self.session.execute(
+            delete(Interruption).where(
+                Interruption.developer_id
+                == developer_id
+            )
+        )
+
+        self.session.execute(
+            delete(ContextSwitch).where(
+                ContextSwitch.developer_id
+                == developer_id
+            )
+        )
+
+        self.session.execute(
+            delete(Metric).where(
+                Metric.developer_id
+                == developer_id
+            )
+        )
+
+    # ==========================================================
+    # METRIC PERSISTENCE
+    # ==========================================================
+
+    def _persist_metrics(
+        self,
+        *,
+        developer_id: int,
+        score: dict,
+    ) -> None:
+        """Persist calculated developer metrics."""
 
         calculated_at = datetime.now().astimezone()
 
         metrics = {
-            "total_events": float(score["total_events"]),
-            "focused_time_seconds": float(score["focused_time_seconds"]),
-            "flow_session_count": float(score["flow_session_count"]),
-            "average_flow_seconds": float(score["average_flow_seconds"]),
-            "interruption_count": float(score["interruption_count"]),
-            "context_switch_count": float(score["context_switch_count"]),
-            "recovery_time_seconds": float(score["recovery_time_seconds"]),
-            "flow_score": float(score["flow_score"]),
+            "total_events": float(
+                score.get("total_events", 0)
+            ),
+            "focused_time_seconds": float(
+                score.get(
+                    "focused_time_seconds",
+                    0,
+                )
+            ),
+            "flow_session_count": float(
+                score.get(
+                    "flow_session_count",
+                    0,
+                )
+            ),
+            "average_flow_seconds": float(
+                score.get(
+                    "average_flow_seconds",
+                    0,
+                )
+            ),
+            "interruption_count": float(
+                score.get(
+                    "interruption_count",
+                    0,
+                )
+            ),
+            "context_switch_count": float(
+                score.get(
+                    "context_switch_count",
+                    0,
+                )
+            ),
+            "recovery_time_seconds": float(
+                score.get(
+                    "recovery_time_seconds",
+                    0,
+                )
+            ),
+            "flow_score": float(
+                score.get(
+                    "flow_score",
+                    0,
+                )
+            ),
         }
 
         for metric_name, value in metrics.items():
@@ -280,9 +542,8 @@ class EventProcessor:
                     value=value,
                     calculated_at=calculated_at,
                     description=(
-                        f"Calculated CogniFlow metric: {metric_name}."
+                        "Calculated CogniFlow metric: "
+                        f"{metric_name}."
                     ),
                 )
             )
-
-        self.session.flush()

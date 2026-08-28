@@ -32,12 +32,19 @@ def get_daily_report(
     if work_date is None:
         work_date = datetime.now()
 
-    # Prevent obviously invalid dates from being requested.
+    # ==========================================================
+    # VALIDATE WORK DATE
+    # ==========================================================
+
     if work_date.year < 2000:
         raise HTTPException(
             status_code=400,
             detail="work_date must be a valid simulation date.",
         )
+
+    # ==========================================================
+    # GENERATE DAILY REPORT
+    # ==========================================================
 
     service = DashboardService(db)
 

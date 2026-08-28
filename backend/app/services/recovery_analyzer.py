@@ -18,46 +18,48 @@ class RecoveryAnalyzer:
         interruptions: Sequence[dict],
         context_switches: Sequence[dict],
     ) -> list[int]:
-        """Calculate recovery durations in seconds.
+        """
+        Calculate recovery durations in seconds.
 
-        Recovery is measured from a relevant interruption/context change
-        until the next focused IDE event.
+        Recovery is measured from an interruption or context switch
+        until the developer returns to focused IDE activity.
 
-        Exact recovery rules are not specified by the project PDF, so
-        this implementation uses the next IDE event as the return point.
+        The next focused IDE event is used as the recovery point.
         """
 
         ordered_events = sorted(
             events,
-            key=lambda event: (event.timestamp, event.id or 0),
+            key=lambda event: (
+                event.timestamp,
+                event.id or 0,
+            ),
         )
+
+        if not ordered_events:
+            return []
 
         recovery_values: list[int] = []
 
-        interruption_event_ids = {
-            item.get("event_id")
-            for item in interruptions
-            if item.get("event_id") is not None
-        }
+        # ----------------------------------------------------------
+        # Build recovery trigger timestamps
+        # ----------------------------------------------------------
 
-        switch_event_ids = {
-            item.get("to_event_id")
-            for item in context_switches
-            if item.get("to_event_id") is not None
-        }
+        trigger_timestamps = self._build_trigger_timestamps(
+            interruptions=interruptions,
+            context_switches=context_switches,
+        )
 
-        trigger_ids = interruption_event_ids | switch_event_ids
-
-        if not trigger_ids:
+        if not trigger_timestamps:
             return recovery_values
 
-        for index, event in enumerate(ordered_events):
-            if event.id not in trigger_ids:
-                continue
+        # ----------------------------------------------------------
+        # Calculate recovery for every trigger
+        # ----------------------------------------------------------
 
-            recovery_event = self._find_next_focused_event(
-                ordered_events,
-                index + 1,
+        for trigger_timestamp in trigger_timestamps:
+            recovery_event = self._find_next_focused_event_after(
+                events=ordered_events,
+                timestamp=trigger_timestamp,
             )
 
             if recovery_event is None:
@@ -68,7 +70,7 @@ class RecoveryAnalyzer:
                     0,
                     (
                         recovery_event.timestamp
-                        - event.timestamp
+                        - trigger_timestamp
                     ).total_seconds(),
                 )
             )
@@ -81,25 +83,78 @@ class RecoveryAnalyzer:
         self,
         recovery_values: Sequence[int],
     ) -> float:
-        """Return average recovery time."""
+        """Return average recovery time in seconds."""
 
         if not recovery_values:
             return 0.0
 
         return sum(recovery_values) / len(recovery_values)
 
-    def _find_next_focused_event(
+    def _build_trigger_timestamps(
         self,
+        *,
+        interruptions: Sequence[dict],
+        context_switches: Sequence[dict],
+    ) -> list:
+        """
+        Build the timestamps from which recovery should be measured.
+
+        Interruption records use their own timestamp.
+
+        Context-switch records use the timestamp of the switch itself.
+        """
+
+        timestamps = []
+
+        # ----------------------------------------------------------
+        # Interruption triggers
+        # ----------------------------------------------------------
+
+        for interruption in interruptions:
+            timestamp = interruption.get("timestamp")
+
+            if timestamp is not None:
+                timestamps.append(timestamp)
+
+        # ----------------------------------------------------------
+        # Context-switch triggers
+        # ----------------------------------------------------------
+
+        for switch in context_switches:
+            timestamp = switch.get("timestamp")
+
+            if timestamp is not None:
+                timestamps.append(timestamp)
+
+        # ----------------------------------------------------------
+        # Remove duplicate timestamps and sort
+        # ----------------------------------------------------------
+
+        return sorted(set(timestamps))
+
+    def _find_next_focused_event_after(
+        self,
+        *,
         events: Sequence[Event],
-        start_index: int,
+        timestamp,
     ) -> Event | None:
-        for event in events[start_index:]:
+        """Return the first focused IDE event after a trigger."""
+
+        for event in events:
+            if event.timestamp <= timestamp:
+                continue
+
             if self._is_focused(event):
                 return event
 
         return None
 
-    def _is_focused(self, event: Event) -> bool:
+    def _is_focused(
+        self,
+        event: Event,
+    ) -> bool:
+        """Return whether an event represents focused IDE activity."""
+
         source = (event.source or "").upper()
         context = (event.context or "").upper()
 

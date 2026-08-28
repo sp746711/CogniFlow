@@ -24,13 +24,20 @@ def get_dashboard(
     """
     Return the complete dynamic CogniFlow dashboard dataset.
 
-    Dashboard data is calculated from the PostgreSQL database,
-    including simulated developer activity and analytics.
+    DashboardService is responsible for combining developer,
+    activity, and analytics data for the dashboard.
     """
 
     service = DashboardService(db)
 
-    return service.get_dashboard()
+    try:
+        return service.get_dashboard()
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
 
 
 @router.get("/developer/{developer_id}")
@@ -39,12 +46,12 @@ def get_developer_dashboard(
     db: Session = Depends(get_db),
 ) -> dict:
     """
-    Return dashboard metrics for one developer.
+    Return the dashboard dataset for one developer.
     """
 
-    # ----------------------------------------------------------
-    # Validate developer
-    # ----------------------------------------------------------
+    # ==========================================================
+    # VALIDATE DEVELOPER
+    # ==========================================================
 
     developer = db.scalar(
         select(Developer).where(
@@ -58,12 +65,19 @@ def get_developer_dashboard(
             detail=f"Developer {developer_id} not found.",
         )
 
-    # ----------------------------------------------------------
-    # Generate developer dashboard
-    # ----------------------------------------------------------
+    # ==========================================================
+    # GENERATE DEVELOPER DASHBOARD
+    # ==========================================================
 
     service = DashboardService(db)
 
-    return service.get_developer_dashboard(
-        developer_id
-    )
+    try:
+        return service.get_developer_dashboard(
+            developer_id
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc

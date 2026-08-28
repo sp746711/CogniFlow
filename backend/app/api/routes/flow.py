@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_db
 from app.models.developer import Developer
 from app.models.event import Event
-from app.services.flow_analyzer import FlowAnalyzer
+from app.models.flow_session import FlowSession
+from app.models.metric import Metric
 
 
 router = APIRouter(
@@ -24,16 +25,18 @@ def get_flow_metrics(
     db: Session = Depends(get_db),
 ) -> dict:
     """
-    Return flow-state analytics from persisted CogniFlow events.
+    Return persisted CogniFlow flow analytics.
 
-    If developer_id is provided, analytics are calculated only for
-    that developer. Otherwise, analytics are calculated for all
-    developers represented in the event data.
+    The simulation pipeline creates raw events and the
+    EventProcessor calculates the derived flow analytics.
+
+    If developer_id is provided, return flow analytics for that
+    developer. Otherwise return flow analytics for all developers.
     """
 
-    # ----------------------------------------------------------
-    # Validate developer when one is requested
-    # ----------------------------------------------------------
+    # ==========================================================
+    # VALIDATE DEVELOPER
+    # ==========================================================
 
     if developer_id is not None:
         developer = db.scalar(
@@ -48,61 +51,122 @@ def get_flow_metrics(
                 detail=f"Developer {developer_id} not found.",
             )
 
-    # ----------------------------------------------------------
-    # Load persisted events
-    # ----------------------------------------------------------
+    # ==========================================================
+    # EVENT COUNT
+    # ==========================================================
 
-    query = select(Event).order_by(Event.timestamp)
+    event_query = select(Event)
 
     if developer_id is not None:
-        query = query.where(
+        event_query = event_query.where(
             Event.developer_id == developer_id
         )
 
     events = list(
-        db.scalars(query).all()
+        db.scalars(
+            event_query.order_by(
+                Event.timestamp.asc(),
+                Event.id.asc(),
+            )
+        ).all()
     )
 
-    # ----------------------------------------------------------
-    # Handle empty event data
-    # ----------------------------------------------------------
+    # ==========================================================
+    # FLOW SESSIONS
+    # ==========================================================
+
+    flow_query = select(FlowSession)
+
+    if developer_id is not None:
+        flow_query = flow_query.where(
+            FlowSession.developer_id == developer_id
+        )
+
+    flow_sessions = list(
+        db.scalars(
+            flow_query.order_by(
+                FlowSession.start_time.asc(),
+                FlowSession.id.asc(),
+            )
+        ).all()
+    )
+
+    # ==========================================================
+    # FLOW METRICS
+    # ==========================================================
+
+    metric_query = select(Metric).where(
+        Metric.metric_name.in_(
+            [
+                "total_events",
+                "focused_time_seconds",
+                "flow_session_count",
+                "average_flow_seconds",
+                "flow_score",
+            ]
+        )
+    )
+
+    if developer_id is not None:
+        metric_query = metric_query.where(
+            Metric.developer_id == developer_id
+        )
+
+    metrics = list(
+        db.scalars(
+            metric_query.order_by(
+                Metric.calculated_at.desc(),
+                Metric.id.desc(),
+            )
+        ).all()
+    )
+
+    # ==========================================================
+    # EMPTY STATE
+    # ==========================================================
 
     if not events:
         return {
             "developer_id": developer_id,
             "events_analyzed": 0,
-            "flow": None,
+            "flow_sessions": 0,
+            "flow_score": 0.0,
+            "focused_time_seconds": 0.0,
+            "average_flow_seconds": 0.0,
             "message": "No activity events found.",
         }
 
-    # ----------------------------------------------------------
-    # Run flow analyzer
-    # ----------------------------------------------------------
+    # ==========================================================
+    # USE MOST RECENT METRIC VALUE
+    # ==========================================================
 
-    analyzer = FlowAnalyzer()
+    metric_values: dict[str, float] = {}
 
-    try:
-        result = analyzer.analyze(events)
+    for metric in metrics:
+        if metric.metric_name not in metric_values:
+            metric_values[metric.metric_name] = float(
+                metric.value
+            )
 
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
-        ) from exc
-
-    # ----------------------------------------------------------
-    # Return analytics
-    # ----------------------------------------------------------
-
-    if isinstance(result, dict):
-        return {
-            "developer_id": developer_id,
-            "events_analyzed": len(events),
-            "flow": result,
-        }
+    # ==========================================================
+    # RETURN FLOW ANALYTICS
+    # ==========================================================
 
     return {
         "developer_id": developer_id,
         "events_analyzed": len(events),
-        "flow": result,
+        "flow_sessions": len(flow_sessions),
+        "flow_score": metric_values.get(
+            "flow_score",
+            0.0,
+        ),
+        "focused_time_seconds": metric_values.get(
+            "focused_time_seconds",
+            0.0,
+        ),
+        "average_flow_seconds": metric_values.get(
+            "average_flow_seconds",
+            0.0,
+        ),
+        "metrics": metric_values,
     }

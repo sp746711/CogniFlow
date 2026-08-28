@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
-from app.models.developer import Developer
-from app.models.event import Event
-from app.services.context_switch_analyzer import ContextSwitchAnalyzer
+from app.services.event_processor import EventProcessor
 
 
 router = APIRouter(
@@ -26,62 +23,48 @@ def get_context_switching(
     """
     Return context-switch analytics from persisted CogniFlow events.
 
-    If developer_id is provided, only that developer's activity is
-    analyzed. Otherwise, all persisted activity is analyzed.
+    If developer_id is provided, only that developer is processed.
+    Otherwise, all developers are processed.
+
+    EventProcessor is used as the central analytics pipeline so that
+    context-switch results remain consistent with flow,
+    interruptions, recovery, and flow-score calculations.
     """
 
-    # ----------------------------------------------------------
-    # Validate developer
-    # ----------------------------------------------------------
+    processor = EventProcessor(db)
+
+    # ==========================================================
+    # SINGLE DEVELOPER
+    # ==========================================================
 
     if developer_id is not None:
-        developer = db.scalar(
-            select(Developer).where(
-                Developer.id == developer_id
+        try:
+            result = processor.process_developer(
+                developer_id=developer_id,
+                persist=True,
             )
-        )
 
-        if developer is None:
+        except ValueError as exc:
             raise HTTPException(
                 status_code=404,
-                detail=f"Developer {developer_id} not found.",
-            )
+                detail=str(exc),
+            ) from exc
 
-    # ----------------------------------------------------------
-    # Load events
-    # ----------------------------------------------------------
-
-    query = select(Event).order_by(Event.timestamp)
-
-    if developer_id is not None:
-        query = query.where(
-            Event.developer_id == developer_id
-        )
-
-    events = list(
-        db.scalars(query).all()
-    )
-
-    # ----------------------------------------------------------
-    # Empty data
-    # ----------------------------------------------------------
-
-    if not events:
         return {
             "developer_id": developer_id,
-            "events_analyzed": 0,
-            "context_switches": [],
-            "message": "No activity events found.",
+            "events_analyzed": result["event_count"],
+            "context_switches": result["context_switches"],
+            "message": "Context-switch analysis completed.",
         }
 
-    # ----------------------------------------------------------
-    # Analyze context switching
-    # ----------------------------------------------------------
-
-    analyzer = ContextSwitchAnalyzer()
+    # ==========================================================
+    # ALL DEVELOPERS
+    # ==========================================================
 
     try:
-        result = analyzer.analyze(events)
+        results = processor.process_all_developers(
+            persist=True,
+        )
 
     except ValueError as exc:
         raise HTTPException(
@@ -89,19 +72,15 @@ def get_context_switching(
             detail=str(exc),
         ) from exc
 
-    # ----------------------------------------------------------
-    # Return result
-    # ----------------------------------------------------------
-
-    if isinstance(result, dict):
-        return {
-            "developer_id": developer_id,
-            "events_analyzed": len(events),
-            "context_switches": result,
-        }
-
     return {
-        "developer_id": developer_id,
-        "events_analyzed": len(events),
-        "context_switches": result,
+        "developer_count": len(results),
+        "developers": [
+            {
+                "developer_id": result["developer_id"],
+                "events_analyzed": result["event_count"],
+                "context_switches": result["context_switches"],
+            }
+            for result in results
+        ],
+        "message": "Context-switch analysis completed.",
     }

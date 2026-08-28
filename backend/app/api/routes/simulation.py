@@ -11,8 +11,28 @@ The simulation represents activity from:
 - Jira
 - GitHub
 
-Generated events are persisted to PostgreSQL so that the
-analytics layer and dashboard can work with dynamic data.
+Generated events are persisted to PostgreSQL and then processed
+through the CogniFlow analytics pipeline.
+
+Pipeline:
+
+    Simulator
+        ↓
+    Unified Events
+        ↓
+    EventProcessor
+        ↓
+    Flow Sessions
+        ↓
+    Interruptions
+        ↓
+    Context Switches
+        ↓
+    Recovery
+        ↓
+    Flow Score
+        ↓
+    Metrics
 
 No real external services are contacted.
 """
@@ -29,6 +49,7 @@ from app.api.dependencies import get_db
 from app.models.developer import Developer
 from app.models.event import Event
 from app.models.task import Task
+from app.services.event_processor import EventProcessor
 from app.simulator.config import DEFAULT_CONFIG
 from app.simulator.runner import SimulationRunner
 
@@ -53,9 +74,11 @@ def run_simulation(
     2. Validate the expected developer population.
     3. Load simulated Jira tasks and bugs.
     4. Run the simulator.
-    5. Convert GeneratedEvent objects into Event database records.
-    6. Persist the events.
-    7. Return a simulation summary.
+    5. Convert GeneratedEvent objects into Event records.
+    6. Persist the raw events.
+    7. Run the EventProcessor analytics pipeline.
+    8. Persist derived analytics and metrics.
+    9. Return a complete simulation summary.
 
     No real Slack, Jira, GitHub, or IDE services are contacted.
     """
@@ -121,7 +144,7 @@ def run_simulation(
     )
 
     # ==========================================================
-    # GENERATE EVENTS
+    # GENERATE SIMULATED EVENTS
     # ==========================================================
 
     try:
@@ -137,49 +160,100 @@ def run_simulation(
             detail=str(exc),
         ) from exc
 
+    if not generated_events:
+        raise HTTPException(
+            status_code=400,
+            detail="The simulation generated no events.",
+        )
+
     # ==========================================================
     # CONVERT GENERATED EVENTS TO DATABASE EVENTS
     # ==========================================================
 
     database_events: list[Event] = []
 
-    for generated_event in generated_events:
-        event = Event(
-            developer_id=generated_event.developer_id,
-            team_id=generated_event.team_id,
-            task_id=generated_event.task_id,
-            timestamp=generated_event.timestamp,
-            source=generated_event.source,
-            event_type=generated_event.event_type,
-            context=generated_event.context,
-            title=generated_event.title,
-            description=generated_event.description,
-            related_developer_id=(
-                generated_event.related_developer_id
-            ),
-            event_metadata=generated_event.event_metadata,
+    try:
+        for generated_event in generated_events:
+            event = Event(
+                developer_id=generated_event.developer_id,
+                team_id=generated_event.team_id,
+                task_id=generated_event.task_id,
+                timestamp=generated_event.timestamp,
+                source=generated_event.source,
+                event_type=generated_event.event_type,
+                context=generated_event.context,
+                title=generated_event.title,
+                description=generated_event.description,
+                related_developer_id=(
+                    generated_event.related_developer_id
+                ),
+                event_metadata=generated_event.event_metadata,
+            )
+
+            db.add(event)
+            database_events.append(event)
+
+        # Make sure the generated Event rows are sent to the
+        # database before the analytics processor reads them.
+        db.flush()
+
+        # ======================================================
+        # PROCESS COMPLETE COGNIFLOW ANALYTICS PIPELINE
+        # ======================================================
+
+        processor = EventProcessor(db)
+
+        analytics_results = processor.process_all_developers(
+            persist=True,
         )
 
-        db.add(event)
-        database_events.append(event)
+        # EventProcessor commits the derived analytics.
 
-    # ==========================================================
-    # PERSIST EVENTS
-    # ==========================================================
+    except ValueError as exc:
+        db.rollback()
 
-    try:
-        db.commit()
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
 
     except Exception as exc:
         db.rollback()
 
         raise HTTPException(
             status_code=500,
-            detail="Failed to persist simulated events.",
+            detail=(
+                "Failed to generate, persist, or process "
+                "the CogniFlow simulation."
+            ),
         ) from exc
 
     # ==========================================================
-    # RETURN SUMMARY
+    # ANALYTICS SUMMARY
+    # ==========================================================
+
+    total_flow_sessions = sum(
+        result.get("flow_sessions", 0)
+        for result in analytics_results
+    )
+
+    total_interruptions = sum(
+        result.get("interruptions", 0)
+        for result in analytics_results
+    )
+
+    total_context_switches = sum(
+        result.get("context_switches", 0)
+        for result in analytics_results
+    )
+
+    total_recovery_seconds = sum(
+        result.get("recovery_time_seconds", 0)
+        for result in analytics_results
+    )
+
+    # ==========================================================
+    # RETURN COMPLETE SIMULATION SUMMARY
     # ==========================================================
 
     return {
@@ -189,4 +263,11 @@ def run_simulation(
         "tasks": len(tasks),
         "events_generated": len(generated_events),
         "events_persisted": len(database_events),
+        "analytics": {
+            "developers_processed": len(analytics_results),
+            "flow_sessions": total_flow_sessions,
+            "interruptions": total_interruptions,
+            "context_switches": total_context_switches,
+            "recovery_time_seconds": total_recovery_seconds,
+        },
     }
