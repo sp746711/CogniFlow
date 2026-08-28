@@ -61,3 +61,19 @@ def seed_teams(db: Session) -> list[Team]:
     db.flush()
 
     return teams
+
+
+if __name__ == "__main__":
+    from app.core.database import SessionLocal
+
+    db = SessionLocal()
+
+    try:
+        teams = seed_teams(db)
+        db.commit()
+        print(f"Successfully seeded {len(teams)} teams.")
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()

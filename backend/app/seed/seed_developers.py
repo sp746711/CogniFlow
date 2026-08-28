@@ -3,17 +3,24 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.database import SessionLocal
 from app.models.developer import Developer
 from app.models.team import Team
 
 
+# ==============================================================
+# DEVELOPER BEHAVIOR PROFILES
+# ==============================================================
+
 # Five different simulated developer behavior profiles.
 #
 # Each team receives one developer of each profile.
-# Therefore:
 #
 # 5 teams × 5 developers = 25 developers
 #
+# These profiles define the developer's baseline behavior.
+# The actual activity data will be dynamically simulated later.
+
 DEVELOPER_PROFILES = [
     {
         "role": "Backend Developer",
@@ -55,6 +62,11 @@ DEVELOPER_PROFILES = [
 ]
 
 
+# ==============================================================
+# SEED DEVELOPERS
+# ==============================================================
+
+
 def seed_developers(db: Session) -> list[Developer]:
     """
     Create five simulated developers for each of the five teams.
@@ -67,6 +79,10 @@ def seed_developers(db: Session) -> list[Developer]:
     Existing developers are reused instead of duplicated.
     """
 
+    # ----------------------------------------------------------
+    # Load the five fixed CogniFlow teams
+    # ----------------------------------------------------------
+
     teams = db.scalars(
         select(Team).order_by(Team.id)
     ).all()
@@ -76,6 +92,10 @@ def seed_developers(db: Session) -> list[Developer]:
             "Exactly 5 teams must exist before seeding developers."
         )
 
+    # ----------------------------------------------------------
+    # Validate the five behavior profiles
+    # ----------------------------------------------------------
+
     if len(DEVELOPER_PROFILES) != 5:
         raise ValueError(
             "Exactly 5 developer behavior profiles are required."
@@ -83,16 +103,33 @@ def seed_developers(db: Session) -> list[Developer]:
 
     developers: list[Developer] = []
 
+    # ----------------------------------------------------------
+    # Create five developers inside every team
+    # ----------------------------------------------------------
+
     for team_index, team in enumerate(teams, start=1):
+
         for developer_index, profile in enumerate(
             DEVELOPER_PROFILES,
             start=1,
         ):
+            # Generates:
+            #
+            # Team 1 → DEV001 ... DEV005
+            # Team 2 → DEV006 ... DEV010
+            # Team 3 → DEV011 ... DEV015
+            # Team 4 → DEV016 ... DEV020
+            # Team 5 → DEV021 ... DEV025
+
             developer_number = (
                 (team_index - 1) * 5
             ) + developer_index
 
             developer_code = f"DEV{developer_number:03d}"
+
+            # --------------------------------------------------
+            # Prevent duplicate developers
+            # --------------------------------------------------
 
             existing_developer = db.scalar(
                 select(Developer).where(
@@ -103,6 +140,10 @@ def seed_developers(db: Session) -> list[Developer]:
             if existing_developer is not None:
                 developers.append(existing_developer)
                 continue
+
+            # --------------------------------------------------
+            # Create developer
+            # --------------------------------------------------
 
             developer = Developer(
                 developer_code=developer_code,
@@ -116,6 +157,48 @@ def seed_developers(db: Session) -> list[Developer]:
             db.add(developer)
             developers.append(developer)
 
+    # Make newly created developers available immediately.
     db.flush()
 
     return developers
+
+
+# ==============================================================
+# COMMAND-LINE ENTRY POINT
+# ==============================================================
+
+
+def main() -> None:
+    """
+    Seed the 25 simulated CogniFlow developers.
+    """
+
+    db = SessionLocal()
+
+    try:
+        developers = seed_developers(db)
+
+        db.commit()
+
+        print(
+            f"Successfully seeded {len(developers)} developers."
+        )
+
+        # Show a simple verification list.
+        for developer in developers:
+            print(
+                f"  - {developer.developer_code}: "
+                f"{developer.name} "
+                f"-> Team ID {developer.team_id}"
+            )
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
+
+
+if __name__ == "__main__":
+    main()
