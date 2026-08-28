@@ -7,6 +7,13 @@ from app.models.developer import Developer
 from app.models.team import Team
 
 
+# Five different simulated developer behavior profiles.
+#
+# Each team receives one developer of each profile.
+# Therefore:
+#
+# 5 teams × 5 developers = 25 developers
+#
 DEVELOPER_PROFILES = [
     {
         "role": "Backend Developer",
@@ -19,7 +26,8 @@ DEVELOPER_PROFILES = [
         "role": "Frontend Developer",
         "behavior_profile": "Collaborative",
         "profile_description": (
-            "Frequently communicates with teammates while continuing development."
+            "Frequently communicates with teammates while continuing "
+            "development."
         ),
     },
     {
@@ -40,8 +48,10 @@ DEVELOPER_PROFILES = [
         "role": "Platform Developer",
         "behavior_profile": "Task Driven",
         "profile_description": (
-            "Works primarily on assigned tasks with structured development activity."
+            "Works primarily on assigned tasks with structured "
+            "development activity."
         ),
+    },
 ]
 
 
@@ -53,6 +63,8 @@ def seed_developers(db: Session) -> list[Developer]:
         5 teams × 5 developers = 25 developers.
 
     Developer codes are deterministic and unique.
+
+    Existing developers are reused instead of duplicated.
     """
 
     teams = db.scalars(
@@ -64,10 +76,14 @@ def seed_developers(db: Session) -> list[Developer]:
             "Exactly 5 teams must exist before seeding developers."
         )
 
+    if len(DEVELOPER_PROFILES) != 5:
+        raise ValueError(
+            "Exactly 5 developer behavior profiles are required."
+        )
+
     developers: list[Developer] = []
 
     for team_index, team in enumerate(teams, start=1):
-
         for developer_index, profile in enumerate(
             DEVELOPER_PROFILES,
             start=1,
@@ -84,7 +100,7 @@ def seed_developers(db: Session) -> list[Developer]:
                 )
             )
 
-            if existing_developer:
+            if existing_developer is not None:
                 developers.append(existing_developer)
                 continue
 
