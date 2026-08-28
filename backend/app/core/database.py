@@ -4,28 +4,29 @@ CogniFlow database configuration.
 This module provides:
 
 - SQLAlchemy declarative Base
-- Async PostgreSQL engine
-- Async session factory
+- PostgreSQL engine
+- Synchronous session factory
 - FastAPI database dependency
 - Database connection helper
+- Database shutdown helper
 
-Database schema creation/migrations will be handled later through
-the project's migration workflow. This file only provides the
-database infrastructure.
+CogniFlow uses PostgreSQL for persistent application data.
+
+The application uses simulated/demo activity only. No real
+Slack, Jira, GitHub, or IDE credentials are required.
+
+Database schema creation and migrations are handled separately
+through Alembic.
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncGenerator
+from collections.abc import Generator
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import (
-    AsyncEngine,
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy import create_engine
 
 from app.core.config import settings
 
@@ -39,12 +40,87 @@ class Base(DeclarativeBase):
     """
     Base class for all CogniFlow SQLAlchemy models.
 
-    Future models such as Team, Developer, Event, Task,
-    FlowSession, Interruption, ContextSwitch and Metric
-    will inherit from this Base.
+    All database models inherit from this class.
+
+    Current models include:
+
+    - Team
+    - Developer
+    - Task
+    - Event
+    - FlowSession
+    - Interruption
+    - ContextSwitch
+    - Metric
     """
 
     pass
+
+
+# ==============================================================
+# DATABASE URL
+# ==============================================================
+
+
+def _get_sync_database_url(database_url: str) -> str:
+    """
+    Convert supported PostgreSQL URLs into a synchronous
+    SQLAlchemy PostgreSQL URL.
+
+    CogniFlow's original configuration may contain:
+
+        postgresql+asyncpg://
+
+    because the initial database implementation used AsyncSQLAlchemy.
+
+    The current CogniFlow service/API architecture uses synchronous
+    SQLAlchemy sessions, so the URL is converted to:
+
+        postgresql+psycopg://
+
+    Plain PostgreSQL URLs are also normalized.
+    """
+
+    url = database_url.strip()
+
+    if not url:
+        raise ValueError(
+            "DATABASE_URL cannot be empty."
+        )
+
+    if url.startswith(
+        "postgresql+asyncpg://"
+    ):
+        return url.replace(
+            "postgresql+asyncpg://",
+            "postgresql+psycopg://",
+            1,
+        )
+
+    if url.startswith(
+        "postgresql://"
+    ):
+        return url.replace(
+            "postgresql://",
+            "postgresql+psycopg://",
+            1,
+        )
+
+    if url.startswith(
+        "postgres://"
+    ):
+        return url.replace(
+            "postgres://",
+            "postgresql+psycopg://",
+            1,
+        )
+
+    return url
+
+
+DATABASE_URL = _get_sync_database_url(
+    settings.DATABASE_URL
+)
 
 
 # ==============================================================
@@ -52,8 +128,8 @@ class Base(DeclarativeBase):
 # ==============================================================
 
 
-engine: AsyncEngine = create_async_engine(
-    settings.DATABASE_URL,
+engine: Engine = create_engine(
+    DATABASE_URL,
     echo=settings.DEBUG,
     pool_pre_ping=True,
 )
@@ -64,12 +140,12 @@ engine: AsyncEngine = create_async_engine(
 # ==============================================================
 
 
-AsyncSessionLocal = async_sessionmaker(
+SessionLocal = sessionmaker(
     bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autoflush=False,
+    class_=Session,
     autocommit=False,
+    autoflush=False,
+    expire_on_commit=False,
 )
 
 
@@ -78,19 +154,28 @@ AsyncSessionLocal = async_sessionmaker(
 # ==============================================================
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+def get_db() -> Generator[Session, None, None]:
     """
     Provide one database session for a FastAPI request.
 
-    The session is automatically closed when the request finishes.
+    The session is automatically closed after the request.
+
+    If an exception occurs while processing the request, the
+    current transaction is rolled back before the exception
+    is re-raised.
     """
 
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        except Exception:
-            await session.rollback()
-            raise
+    db = SessionLocal()
+
+    try:
+        yield db
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
 
 
 # ==============================================================
@@ -98,7 +183,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 # ==============================================================
 
 
-async def check_database_connection() -> bool:
+def check_database_connection() -> bool:
     """
     Check whether PostgreSQL is reachable.
 
@@ -108,8 +193,10 @@ async def check_database_connection() -> bool:
     """
 
     try:
-        async with engine.connect() as connection:
-            await connection.execute(text("SELECT 1"))
+        with engine.connect() as connection:
+            connection.execute(
+                text("SELECT 1")
+            )
 
         return True
 
@@ -122,11 +209,58 @@ async def check_database_connection() -> bool:
 # ==============================================================
 
 
-async def close_database() -> None:
+def close_database() -> None:
     """
     Dispose the SQLAlchemy engine.
 
-    This should be called when the FastAPI application shuts down.
+    This should be called when the FastAPI application
+    shuts down.
     """
 
-    await engine.dispose()
+    engine.dispose()
+
+
+# ==============================================================
+# OPTIONAL DATABASE INITIALIZATION HELPER
+# ==============================================================
+
+
+def create_database_tables() -> None:
+    """
+    Create all registered SQLAlchemy tables.
+
+    This helper is intentionally separate from application startup.
+
+    CogniFlow's normal production/development schema management
+    should use Alembic migrations.
+
+    This function is useful for local testing when a developer
+    explicitly wants SQLAlchemy to create the schema.
+    """
+
+    # Import models so that all model classes are registered
+    # with Base.metadata before create_all() is called.
+    import app.models  # noqa: F401
+
+    Base.metadata.create_all(
+        bind=engine
+    )
+
+
+# ==============================================================
+# DATABASE SESSION HEALTH CHECK
+# ==============================================================
+
+
+def verify_database() -> None:
+    """
+    Verify the database connection.
+
+    Raises:
+        RuntimeError: when PostgreSQL cannot be reached.
+    """
+
+    if not check_database_connection():
+        raise RuntimeError(
+            "CogniFlow could not connect to the PostgreSQL database."
+        )
