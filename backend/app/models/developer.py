@@ -71,6 +71,7 @@ class Developer(Base):
 
     events: Mapped[list["Event"]] = relationship(
         "Event",
+        foreign_keys="Event.developer_id",
         back_populates="developer",
         cascade="all, delete-orphan",
     )

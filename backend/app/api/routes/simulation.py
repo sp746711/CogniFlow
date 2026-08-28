@@ -12,15 +12,16 @@ The simulation represents activity from:
 - GitHub
 
 Generated events are persisted to PostgreSQL so that the
-analytics layer and future React dashboard can work with
-dynamic data.
+analytics layer and dashboard can work with dynamic data.
+
+No real external services are contacted.
 """
 
 from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -46,115 +47,146 @@ def run_simulation(
     """
     Generate and persist one simulated CogniFlow workday.
 
-    The endpoint:
+    Workflow:
 
-    1. Loads the 25 simulated developers.
-    2. Loads the simulated Jira tasks and bugs.
-    3. Runs the CogniFlow simulator.
-    4. Generates unified developer activity events.
-    5. Stores those events in PostgreSQL.
-    6. Returns a summary of the generated simulation.
+    1. Load the simulated developers.
+    2. Validate the expected developer population.
+    3. Load simulated Jira tasks and bugs.
+    4. Run the simulator.
+    5. Convert GeneratedEvent objects into Event database records.
+    6. Persist the events.
+    7. Return a simulation summary.
 
     No real Slack, Jira, GitHub, or IDE services are contacted.
     """
 
-    # ----------------------------------------------------------
-    # Work date
-    # ----------------------------------------------------------
+    # ==========================================================
+    # WORK DATE
+    # ==========================================================
 
     if work_date is None:
         work_date = datetime.now()
 
-    # ----------------------------------------------------------
-    # Load developers
-    # ----------------------------------------------------------
+    # ==========================================================
+    # LOAD DEVELOPERS
+    # ==========================================================
 
     developers = list(
         db.scalars(
-            select(Developer)
-            .order_by(Developer.id)
+            select(Developer).order_by(Developer.id)
         ).all()
     )
 
-    # ----------------------------------------------------------
-    # Validate developer population
-    # ----------------------------------------------------------
+    # ==========================================================
+    # VALIDATE DEVELOPERS
+    # ==========================================================
 
-    if len(developers) != DEFAULT_CONFIG.developer_count:
-        raise ValueError(
-            f"CogniFlow requires "
-            f"{DEFAULT_CONFIG.developer_count} developers "
-            f"for simulation, but found {len(developers)}."
+    expected_developers = DEFAULT_CONFIG.developer_count
+
+    if len(developers) != expected_developers:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"CogniFlow requires {expected_developers} "
+                f"developers for simulation, but found "
+                f"{len(developers)}."
+            ),
         )
 
-    # ----------------------------------------------------------
-    # Load tasks
-    # ----------------------------------------------------------
+    # ==========================================================
+    # LOAD TASKS
+    # ==========================================================
 
     tasks = list(
         db.scalars(
-            select(Task)
-            .order_by(Task.id)
+            select(Task).order_by(Task.id)
         ).all()
     )
 
-    # ----------------------------------------------------------
-    # Create simulator
-    # ----------------------------------------------------------
+    if not tasks:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No simulated Jira tasks or bugs were found. "
+                "Seed the tasks before running the simulation."
+            ),
+        )
+
+    # ==========================================================
+    # CREATE SIMULATOR
+    # ==========================================================
 
     runner = SimulationRunner(
         config=DEFAULT_CONFIG,
     )
 
-    # ----------------------------------------------------------
-    # Generate simulated events
-    # ----------------------------------------------------------
+    # ==========================================================
+    # GENERATE EVENTS
+    # ==========================================================
 
-    generated_events = runner.run(
-        work_date=work_date,
-        developers=developers,
-        tasks=tasks,
-    )
+    try:
+        generated_events = runner.run(
+            work_date=work_date,
+            developers=developers,
+            tasks=tasks,
+        )
 
-    # ----------------------------------------------------------
-    # Convert generated events into database events
-    # ----------------------------------------------------------
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    # ==========================================================
+    # CONVERT GENERATED EVENTS TO DATABASE EVENTS
+    # ==========================================================
 
     database_events: list[Event] = []
 
     for generated_event in generated_events:
         event = Event(
             developer_id=generated_event.developer_id,
+            team_id=generated_event.team_id,
             task_id=generated_event.task_id,
             timestamp=generated_event.timestamp,
             source=generated_event.source,
             event_type=generated_event.event_type,
-            metadata=generated_event.metadata,
+            context=generated_event.context,
+            title=generated_event.title,
+            description=generated_event.description,
+            related_developer_id=(
+                generated_event.related_developer_id
+            ),
+            event_metadata=generated_event.event_metadata,
         )
 
         db.add(event)
         database_events.append(event)
 
-    # ----------------------------------------------------------
-    # Persist simulation
-    # ----------------------------------------------------------
+    # ==========================================================
+    # PERSIST EVENTS
+    # ==========================================================
 
     try:
         db.commit()
 
-    except Exception:
+    except Exception as exc:
         db.rollback()
-        raise
 
-    # ----------------------------------------------------------
-    # Return summary
-    # ----------------------------------------------------------
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to persist simulated events.",
+        ) from exc
+
+    # ==========================================================
+    # RETURN SUMMARY
+    # ==========================================================
 
     return {
         "message": "Simulation completed.",
         "work_date": work_date.isoformat(),
         "developers": len(developers),
         "tasks": len(tasks),
-        "events_generated": len(database_events),
+        "events_generated": len(generated_events),
         "events_persisted": len(database_events),
     }

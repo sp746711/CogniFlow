@@ -1,10 +1,16 @@
-"""Recovery analytics API routes."""
+"""Recovery analytics API routes for CogniFlow."""
 
-from fastapi import APIRouter, Depends
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
+from app.models.developer import Developer
+from app.models.event import Event
 from app.services.recovery_analyzer import RecoveryAnalyzer
+
 
 router = APIRouter(
     prefix="/recovery",
@@ -17,11 +23,85 @@ def get_recovery(
     developer_id: int | None = None,
     db: Session = Depends(get_db),
 ) -> dict:
-    """Return recovery-time analytics."""
+    """
+    Return recovery-time analytics from persisted CogniFlow events.
 
-    analyzer = RecoveryAnalyzer(db)
+    If developer_id is provided, only that developer's activity is
+    analyzed. Otherwise, all persisted activity is analyzed.
+    """
+
+    # ----------------------------------------------------------
+    # Validate developer
+    # ----------------------------------------------------------
 
     if developer_id is not None:
-        return analyzer.analyze_developer(developer_id)
+        developer = db.scalar(
+            select(Developer).where(
+                Developer.id == developer_id
+            )
+        )
 
-    return analyzer.analyze_all()
+        if developer is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Developer {developer_id} not found.",
+            )
+
+    # ----------------------------------------------------------
+    # Load events
+    # ----------------------------------------------------------
+
+    query = select(Event).order_by(Event.timestamp)
+
+    if developer_id is not None:
+        query = query.where(
+            Event.developer_id == developer_id
+        )
+
+    events = list(
+        db.scalars(query).all()
+    )
+
+    # ----------------------------------------------------------
+    # Empty data
+    # ----------------------------------------------------------
+
+    if not events:
+        return {
+            "developer_id": developer_id,
+            "events_analyzed": 0,
+            "recovery": None,
+            "message": "No activity events found.",
+        }
+
+    # ----------------------------------------------------------
+    # Analyze recovery
+    # ----------------------------------------------------------
+
+    analyzer = RecoveryAnalyzer()
+
+    try:
+        result = analyzer.analyze(events)
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    # ----------------------------------------------------------
+    # Return result
+    # ----------------------------------------------------------
+
+    if isinstance(result, dict):
+        return {
+            "developer_id": developer_id,
+            "events_analyzed": len(events),
+            "recovery": result,
+        }
+
+    return {
+        "developer_id": developer_id,
+        "events_analyzed": len(events),
+        "recovery": result,
+    }
