@@ -31,7 +31,7 @@ def get_dashboard(
     service = DashboardService(db)
 
     try:
-        return service.get_dashboard()
+        return service.get_overview()
 
     except ValueError as exc:
         raise HTTPException(
@@ -72,7 +72,7 @@ def get_developer_dashboard(
     service = DashboardService(db)
 
     try:
-        return service.get_developer_dashboard(
+        return service.get_developer_summary(
             developer_id
         )
 

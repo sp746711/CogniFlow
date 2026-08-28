@@ -308,6 +308,50 @@ class DashboardService:
             ),
         }
 
+    def get_daily_report(
+        self,
+        *,
+        work_date: datetime,
+    ) -> dict[str, Any]:
+        """Return a dynamic daily productivity report."""
+
+        start_time = work_date.replace(
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+
+        end_time = work_date.replace(
+            hour=23,
+            minute=59,
+            second=59,
+            microsecond=999999,
+        )
+
+        overview = self.get_overview(
+            start_time=start_time,
+            end_time=end_time,
+        )
+
+        return {
+            "work_date": start_time.date().isoformat(),
+            "teams": overview["teams"],
+            "developers": overview["developers"],
+            "events": overview["events"],
+            "flow_sessions": overview["flow_sessions"],
+            "total_focused_time_seconds": overview[
+                "total_focused_time_seconds"
+            ],
+            "average_flow_seconds": overview["average_flow_seconds"],
+            "interruptions": overview["interruptions"],
+            "context_switches": overview["context_switches"],
+            "recovery_time_seconds": overview[
+                "recovery_time_seconds"
+            ],
+            "flow_score": overview["flow_score"],
+        }
+
     def get_recent_events(
         self,
         *,
