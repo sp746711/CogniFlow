@@ -1,0 +1,121 @@
+# ==============================================================
+# CogniFlow Root GitIgnore Configuration
+# Comprehensive, Production-Ready Ignore Rules
+# ==============================================================
+
+# --------------------------------------------------------------
+# 1. Environment Files & Secrets (CRITICAL SECURITY)
+# --------------------------------------------------------------
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+!.env.example
+frontend/.env
+backend/.env
+!frontend/.env.example
+!backend/.env.example
+
+# Private Credentials & Certificates
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# --------------------------------------------------------------
+# 2. Python & FastAPI Backend Artifacts
+# --------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+build/
+dist/
+*.manifest
+*.spec
+
+# Python Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing & Type Checking Caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# --------------------------------------------------------------
+# 3. Node.js & React Frontend Artifacts
+# --------------------------------------------------------------
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+.vite/
+.cache/
+*.timestamp-*.mjs
+
+# Package Manager Logs & Caches
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.npm/
+.yarn-cache/
+
+# --------------------------------------------------------------
+# 4. Databases & Local Data (Preserving Alembic Migrations & Seeds)
+# --------------------------------------------------------------
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# --------------------------------------------------------------
+# 5. OS & IDE Metadata
+# --------------------------------------------------------------
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+ehthumbs.db
+
+# macOS & Linux
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Editors & IDEs
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.iml
+*.sublime-project
+*.sublime-workspace
+
+# --------------------------------------------------------------
+# 6. Temporary & Backup Files
+# --------------------------------------------------------------
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.orig
+*~
