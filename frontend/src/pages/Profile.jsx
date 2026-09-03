@@ -1,44 +1,58 @@
 import React from 'react';
 import GlassCard from '../components/common/GlassCard';
-import { User, Shield, Key, Bell } from 'lucide-react';
+import { User, Shield, Bell, Key } from 'lucide-react';
 
 export const Profile = () => {
   return (
-    <div className="fade-in">
-      <GlassCard title="User Workspace Profile" icon={User} style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', marginBottom: '1.5rem' }}>
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+      <div>
+        <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#ffffff' }}>
+          Workspace <span className="gradient-text">Profile</span>
+        </h1>
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+          Manage your platform administrative credentials & notifications.
+        </p>
+      </div>
+
+      <GlassCard>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', marginBottom: '1.75rem', flexWrap: 'wrap' }}>
           <div
             style={{
-              width: '64px',
-              height: '64px',
+              width: '68px',
+              height: '68px',
               borderRadius: '50%',
-              background: 'var(--primary-gradient)',
+              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(139, 92, 246, 0.4) 100%)',
+              border: '1px solid rgba(139, 92, 246, 0.4)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: '#ffffff',
-              boxShadow: 'var(--glow-cyan)',
+              boxShadow: 'var(--glow-violet)',
             }}
           >
-            <User size={32} />
+            <User size={34} />
           </div>
           <div>
-            <h2 style={{ fontSize: '1.35rem', fontWeight: 800 }}>Engineering Workspace Admin</h2>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-subtle)' }}>admin@cogniflow.internal • Lead Platform Architect</p>
-            <span className="badge badge-success" style={{ marginTop: '0.35rem' }}>System Administrator</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.2rem' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#ffffff' }}>Platform Administrator</h2>
+              <span className="badge badge-success">Active Session</span>
+            </div>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+              admin@cogniflow.internal • Lead Platform & Telemetry Architect
+            </p>
           </div>
         </div>
 
         <div className="grid-2">
           <GlassCard title="Security & Access Control" icon={Shield}>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              Full read/write permissions for workflow analytics dashboard, developer performance indexes, daily reporting, and workday simulations.
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+              Full administrative read/write authorization across workflow analytics, developer telemetry, reports generation, and workday simulations.
             </p>
           </GlassCard>
 
           <GlassCard title="Notification Preferences" icon={Bell}>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              Alerts enabled for high developer interruption frequency and flow score drops below 40.0 index threshold.
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+              Automated telemetry alerts configured for high developer interruption frequency and flow score drops below 40.0 threshold.
             </p>
           </GlassCard>
         </div>
@@ -48,3 +62,4 @@ export const Profile = () => {
 };
 
 export default Profile;
+

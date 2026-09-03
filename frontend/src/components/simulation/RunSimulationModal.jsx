@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { PlayCircle, X, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { PlayCircle, X, CheckCircle2, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 
 export const RunSimulationModal = () => {
   const { simulationModalOpen, setSimulationModalOpen, handleRunSimulation, selectedDate } = useApp();
@@ -33,8 +33,8 @@ export const RunSimulationModal = () => {
         {/* Modal Header */}
         <div className="glass-header">
           <div className="glass-header-title">
-            <PlayCircle size={22} color="var(--primary-blue)" />
-            <span>Run Workday Simulation</span>
+            <PlayCircle size={22} color="#0ea5e9" />
+            <span style={{ color: '#0f172a' }}>Run Workday Simulation</span>
           </div>
           <button
             onClick={() => {
@@ -43,7 +43,7 @@ export const RunSimulationModal = () => {
               setError(null);
             }}
             className="btn-glass btn-sm"
-            style={{ padding: '0.3rem', borderRadius: '50%' }}
+            style={{ padding: '0.35rem', borderRadius: '50%' }}
           >
             <X size={18} />
           </button>
@@ -51,14 +51,14 @@ export const RunSimulationModal = () => {
 
         {/* Modal Body */}
         <div className="glass-body">
-          <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
-            Generate simulated developer activity across IDE, Slack, Jira, and GitHub for 25 developers over a 10:00 AM – 6:00 PM workday, and execute the CogniFlow analytics pipeline.
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: '1.25rem', lineHeight: 1.6 }}>
+            Generate simulated telemetry across IDE, Slack, Jira, and GitHub for 25 developers over a 10:00 AM – 6:00 PM workday, and execute the CogniFlow analytics pipeline.
           </p>
 
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: '1.25rem' }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem' }}>
-                Simulation Work Date
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '0.4rem', color: 'var(--text-secondary)' }}>
+                Simulation Workday Date
               </label>
               <input
                 type="date"
@@ -81,6 +81,7 @@ export const RunSimulationModal = () => {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.5rem',
+                  background: 'var(--danger-bg)',
                 }}
               >
                 <AlertCircle size={16} />
@@ -116,7 +117,7 @@ export const RunSimulationModal = () => {
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
               <button
                 type="button"
-                className="btn-glass"
+                className="btn-glass btn-secondary btn-pill"
                 onClick={() => setSimulationModalOpen(false)}
                 disabled={loading}
               >
@@ -124,11 +125,11 @@ export const RunSimulationModal = () => {
               </button>
               <button
                 type="submit"
-                className="btn-glass btn-primary"
+                className="btn-glass btn-primary btn-pill"
                 disabled={loading}
                 style={{ gap: '0.5rem' }}
               >
-                {loading ? <Loader2 size={16} className="spin" /> : <PlayCircle size={16} />}
+                {loading ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <Sparkles size={16} />}
                 <span>{loading ? 'Processing Simulation...' : 'Execute Simulation'}</span>
               </button>
             </div>
@@ -140,3 +141,4 @@ export const RunSimulationModal = () => {
 };
 
 export default RunSimulationModal;
+

@@ -4,10 +4,10 @@ import api from '../services/api';
 import GlassCard from '../components/common/GlassCard';
 import StatCard from '../components/common/StatCard';
 import FlowGauge from '../components/common/FlowGauge';
-import LoadingSkeleton from '../components/common/LoadingSkeleton';
-import ErrorState from '../components/common/ErrorState';
-import EmptyState from '../components/common/EmptyState';
-import { FileText, Calendar, Printer, Download, Award, Users, Building2, Zap, BellOff, Shuffle, Clock } from 'lucide-react';
+import SkeletonLoader from '../components/ui/SkeletonLoader';
+import ErrorState from '../components/ui/ErrorState';
+import EmptyState from '../components/ui/EmptyState';
+import { FileText, Calendar, Printer, Award, Users, Building2, Zap, BellOff, Shuffle, Clock } from 'lucide-react';
 
 export const Reports = () => {
   const { selectedDate } = useApp();
@@ -38,52 +38,58 @@ export const Reports = () => {
   };
 
   return (
-    <div className="fade-in">
-      {/* Top Report Controls */}
-      <GlassCard title="Daily Productivity Report Generator" icon={FileText} style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <Calendar size={18} color="var(--primary-blue)" />
-            <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>Select Workday Date:</span>
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+      {/* Header & Controls */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#ffffff' }}>
+            Executive <span className="gradient-text">Productivity Reports</span>
+          </h1>
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+            Automated daily snapshot of team focus time, flow sessions, and interruptions.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Calendar size={16} style={{ color: '#8b5cf6' }} />
             <input
               type="date"
               className="glass-input"
-              style={{ width: 'auto' }}
+              style={{ width: 'auto', padding: '0.45rem 0.85rem' }}
               value={reportDate}
               onChange={(e) => setReportDate(e.target.value)}
             />
           </div>
 
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <button onClick={handlePrint} className="btn-glass btn-sm" style={{ gap: '0.4rem' }}>
-              <Printer size={14} /> Print Report
-            </button>
-          </div>
+          <button onClick={handlePrint} className="btn-glass btn-secondary btn-sm btn-pill" style={{ gap: '0.4rem' }}>
+            <Printer size={14} /> Print Report
+          </button>
         </div>
-      </GlassCard>
+      </div>
 
       {/* Report Document Content */}
       {loading ? (
-        <LoadingSkeleton count={4} />
+        <SkeletonLoader type="cards" count={4} />
       ) : error ? (
         <ErrorState message={error} onRetry={fetchReport} />
       ) : !report ? (
-        <EmptyState title="No Report Available" message="No activity report found for the selected date." />
+        <EmptyState title="No Report Available" description="No activity report found for the selected date. Try running a workday simulation first." />
       ) : (
-        <div className="fade-in">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
           {/* Executive Summary Card */}
-          <GlassCard className="mb-6" style={{ marginBottom: '1.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--glass-border-subtle)', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
+          <GlassCard>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--glass-border-subtle)', paddingBottom: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
               <div>
-                <h2 style={{ fontSize: '1.5rem', fontWeight: 800 }}>
-                  CogniFlow Daily Productivity Snapshot
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#ffffff' }}>
+                  CogniFlow Executive Productivity Snapshot
                 </h2>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-subtle)' }}>
-                  Workday: <strong>{report.work_date}</strong> (10:00 AM – 6:00 PM)
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                  Workday Date: <strong style={{ color: '#ffffff' }}>{report.work_date}</strong> (10:00 AM – 6:00 PM)
                 </p>
               </div>
               <span className="badge badge-success" style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}>
-                Report Generated
+                Verified FastAPI Telemetry
               </span>
             </div>
 
@@ -137,3 +143,4 @@ export const Reports = () => {
 };
 
 export default Reports;
+

@@ -2,10 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import GlassCard from '../components/common/GlassCard';
-import LoadingSkeleton from '../components/common/LoadingSkeleton';
-import ErrorState from '../components/common/ErrorState';
-import EmptyState from '../components/common/EmptyState';
-import { Users, User, ArrowRight, Shield } from 'lucide-react';
+import SkeletonLoader from '../components/ui/SkeletonLoader';
+import ErrorState from '../components/ui/ErrorState';
+import EmptyState from '../components/ui/EmptyState';
+import { Users, User, ArrowRight, Search } from 'lucide-react';
 
 export const Developers = () => {
   const [developers, setDevelopers] = useState([]);
@@ -17,7 +17,7 @@ export const Developers = () => {
     setLoading(true);
     try {
       const data = await api.getDevelopers();
-      setDevelopers(data);
+      setDevelopers(data || []);
       setError(null);
     } catch (err) {
       setError(err.message || 'Failed to fetch developers.');
@@ -32,35 +32,48 @@ export const Developers = () => {
 
   const filtered = developers.filter(
     (dev) =>
-      dev.name.toLowerCase().includes(search.toLowerCase()) ||
-      dev.developer_code.toLowerCase().includes(search.toLowerCase()) ||
-      dev.role.toLowerCase().includes(search.toLowerCase())
+      dev.name?.toLowerCase().includes(search.toLowerCase()) ||
+      dev.developer_code?.toLowerCase().includes(search.toLowerCase()) ||
+      dev.role?.toLowerCase().includes(search.toLowerCase())
   );
 
-  if (loading) return <LoadingSkeleton count={6} />;
+  if (loading) return <SkeletonLoader type="cards" count={6} />;
   if (error) return <ErrorState message={error} onRetry={fetchDevelopers} />;
 
   return (
-    <div className="fade-in">
-      {/* Top Search Bar */}
-      <GlassCard title="Developers Directory" icon={Users} className="mb-6" style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <input
-            type="text"
-            placeholder="Search developers by name, code (e.g. DEV_001), or role..."
-            className="glass-input"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <div className="badge badge-info" style={{ padding: '0.6rem 1rem', flexShrink: 0 }}>
-            {filtered.length} Developers
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+      {/* Header & Search */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a' }}>
+            Developers <span className="gradient-text">Directory</span>
+          </h1>
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+            Simulated engineering workforce telemetry & individual flow profiles.
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+          <div style={{ width: '320px', position: 'relative' }}>
+            <Search size={16} style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-subtle)' }} />
+            <input
+              type="text"
+              placeholder="Search by name, code (DEV_001), or role..."
+              className="glass-input"
+              style={{ paddingLeft: '2.5rem' }}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="badge badge-sky" style={{ padding: '0.55rem 1rem' }}>
+            <Users size={14} /> {filtered.length} Engineers
           </div>
         </div>
-      </GlassCard>
+      </div>
 
       {/* Developer Grid */}
       {filtered.length === 0 ? (
-        <EmptyState title="No Developers Found" message="Try searching for another developer name or code." />
+        <EmptyState title="No Developers Found" description="Try searching for another developer name or code (e.g., DEV_001)." />
       ) : (
         <div className="grid-3">
           {filtered.map((dev) => (
@@ -69,22 +82,23 @@ export const Developers = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   <div
                     style={{
-                      width: '42px',
-                      height: '42px',
+                      width: '44px',
+                      height: '44px',
                       borderRadius: '50%',
-                      background: 'var(--primary-gradient)',
+                      background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.15) 0%, rgba(56, 189, 248, 0.25) 100%)',
+                      border: '1px solid rgba(14, 165, 233, 0.3)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#ffffff',
-                      fontWeight: 700,
+                      color: '#0ea5e9',
+                      boxShadow: 'var(--glow-sky)',
                     }}
                   >
                     <User size={20} />
                   </div>
                   <div>
-                    <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>{dev.name}</h3>
-                    <span className="badge badge-indigo" style={{ fontSize: '0.7rem' }}>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0f172a' }}>{dev.name}</h3>
+                    <span className="badge badge-sky" style={{ fontSize: '0.725rem' }}>
                       {dev.developer_code}
                     </span>
                   </div>
@@ -94,22 +108,22 @@ export const Developers = () => {
                 )}
               </div>
 
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                <div><strong>Role:</strong> {dev.role}</div>
-                <div><strong>Profile:</strong> {dev.behavior_profile}</div>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <div><strong style={{ color: 'var(--text-secondary)' }}>Role:</strong> {dev.role}</div>
+                <div><strong style={{ color: 'var(--text-secondary)' }}>Behavioral Profile:</strong> {dev.behavior_profile}</div>
                 {dev.profile_description && (
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-subtle)', fontStyle: 'italic' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-subtle)', fontStyle: 'italic', marginTop: '0.2rem' }}>
                     "{dev.profile_description}"
                   </div>
                 )}
               </div>
 
               <Link
-                to={`/developers/${dev.id}`}
-                className="btn-glass btn-sm"
-                style={{ width: '100%', justifyContent: 'center', gap: '0.4rem' }}
+                to={`/workspace/developers/${dev.id}`}
+                className="btn-glass btn-secondary btn-sm"
+                style={{ width: '100%', justifyContent: 'center', gap: '0.4rem', borderRadius: '10px' }}
               >
-                <span>View Flow Analytics</span>
+                <span>View Individual Analytics</span>
                 <ArrowRight size={14} />
               </Link>
             </GlassCard>
@@ -121,3 +135,5 @@ export const Developers = () => {
 };
 
 export default Developers;
+
+
