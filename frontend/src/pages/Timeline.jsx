@@ -2,10 +2,10 @@ import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import GlassCard from '../components/common/GlassCard';
 import EventCard from '../components/events/EventCard';
-import LoadingSkeleton from '../components/common/LoadingSkeleton';
-import ErrorState from '../components/common/ErrorState';
-import EmptyState from '../components/common/EmptyState';
-import { Calendar, Filter, Code, MessageSquare, CheckSquare, GitCommit } from 'lucide-react';
+import SkeletonLoader from '../components/ui/SkeletonLoader';
+import ErrorState from '../components/ui/ErrorState';
+import EmptyState from '../components/ui/EmptyState';
+import { Calendar, Filter } from 'lucide-react';
 
 export const Timeline = () => {
   const [events, setEvents] = useState([]);
@@ -21,8 +21,8 @@ export const Timeline = () => {
         api.getEvents(selectedSource !== 'ALL' ? { source: selectedSource.toLowerCase() } : {}),
         api.getTasks().catch(() => []),
       ]);
-      setEvents(evts);
-      setTasks(tsk);
+      setEvents(evts || []);
+      setTasks(tsk || []);
       setError(null);
     } catch (err) {
       setError(err.message || 'Failed to fetch timeline activity.');
@@ -36,36 +36,41 @@ export const Timeline = () => {
   }, [selectedSource]);
 
   return (
-    <div className="fade-in">
-      <GlassCard title="Unified Activity Timeline" icon={Calendar} style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-          <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-            Chronological log of IDE edits, Slack messages, Jira task updates, and GitHub commits.
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+      {/* Header & Filter */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#ffffff' }}>
+            Chronological <span className="gradient-text">Timeline</span>
+          </h1>
+          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+            Unified stream of IDE code edits, Slack chatter, Jira tickets, and GitHub commits.
           </p>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Filter size={16} color="var(--text-muted)" />
-            {['ALL', 'IDE', 'SLACK', 'JIRA', 'GITHUB'].map((src) => (
-              <button
-                key={src}
-                onClick={() => setSelectedSource(src)}
-                className={`btn-glass btn-sm ${selectedSource === src ? 'btn-primary' : ''}`}
-              >
-                {src}
-              </button>
-            ))}
-          </div>
         </div>
-      </GlassCard>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+          <Filter size={15} style={{ color: 'var(--text-subtle)', marginRight: '0.25rem' }} />
+          {['ALL', 'IDE', 'SLACK', 'JIRA', 'GITHUB'].map((src) => (
+            <button
+              key={src}
+              onClick={() => setSelectedSource(src)}
+              className={`btn-glass btn-sm ${selectedSource === src ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ borderRadius: '9999px', fontSize: '0.775rem', padding: '0.35rem 0.85rem' }}
+            >
+              {src}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Main Timeline Stream */}
-      <GlassCard title={`Timeline Stream (${events.length} Events)`} icon={Calendar}>
+      <GlassCard title={`Timeline Stream (${events.length} Telemetry Events)`} icon={Calendar}>
         {loading ? (
-          <LoadingSkeleton count={4} />
+          <SkeletonLoader type="table" count={5} />
         ) : error ? (
           <ErrorState message={error} onRetry={fetchTimelineData} />
         ) : events.length === 0 ? (
-          <EmptyState title="No Timeline Events" message="No matching events found for this filter." />
+          <EmptyState title="No Timeline Events" description="No matching events found for this telemetry filter." />
         ) : (
           events.map((evt) => <EventCard key={evt.id} event={evt} />)
         )}
@@ -75,3 +80,4 @@ export const Timeline = () => {
 };
 
 export default Timeline;
+

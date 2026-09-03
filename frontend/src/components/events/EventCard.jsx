@@ -3,16 +3,16 @@ import { Code, MessageSquare, CheckSquare, GitCommit, ChevronDown, ChevronUp, Cl
 
 const getSourceIcon = (source) => {
   const s = (source || '').toLowerCase();
-  if (s === 'ide') return <Code size={16} color="#0284c7" />;
+  if (s === 'ide') return <Code size={16} color="#0ea5e9" />;
   if (s === 'slack') return <MessageSquare size={16} color="#6366f1" />;
   if (s === 'jira') return <CheckSquare size={16} color="#06b6d4" />;
   if (s === 'github') return <GitCommit size={16} color="#10b981" />;
-  return <Code size={16} />;
+  return <Code size={16} color="#0ea5e9" />;
 };
 
 const getSourceBadgeClass = (source) => {
   const s = (source || '').toLowerCase();
-  if (s === 'ide') return 'badge-info';
+  if (s === 'ide') return 'badge-sky';
   if (s === 'slack') return 'badge-indigo';
   if (s === 'jira') return 'badge-warning';
   if (s === 'github') return 'badge-success';
@@ -33,17 +33,20 @@ export const EventCard = ({ event }) => {
         padding: '1rem 1.25rem',
         marginBottom: '0.75rem',
         transition: 'all 0.2s ease',
+        background: 'rgba(255, 255, 255, 0.9)',
+        borderColor: 'rgba(14, 165, 233, 0.15)',
+        boxShadow: 'var(--shadow-sm)',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
           <div
             style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '8px',
-              background: 'rgba(255, 255, 255, 0.9)',
-              border: '1px solid var(--glass-border-subtle)',
+              width: '38px',
+              height: '38px',
+              borderRadius: '10px',
+              background: 'rgba(240, 249, 255, 0.9)',
+              border: '1px solid rgba(14, 165, 233, 0.2)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -60,7 +63,7 @@ export const EventCard = ({ event }) => {
                 {event.context}
               </span>
             </div>
-            <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 600, color: '#0f172a' }}>
               {event.title}
             </h4>
           </div>
@@ -81,10 +84,10 @@ export const EventCard = ({ event }) => {
           {(event.description || event.event_metadata) && (
             <button
               onClick={() => setExpanded(!expanded)}
-              className="btn-glass btn-sm"
-              style={{ padding: '0.3rem', borderRadius: '50%' }}
+              className="btn-glass btn-secondary btn-sm"
+              style={{ padding: '0.35rem', borderRadius: '50%' }}
             >
-              {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
             </button>
           )}
         </div>
@@ -104,12 +107,14 @@ export const EventCard = ({ event }) => {
           {event.event_metadata && (
             <pre
               style={{
-                background: 'rgba(15, 23, 42, 0.05)',
-                padding: '0.5rem 0.75rem',
+                background: '#f8fafc',
+                color: '#0ea5e9',
+                padding: '0.65rem 0.85rem',
                 borderRadius: 'var(--radius-sm)',
-                fontSize: '0.75rem',
+                fontSize: '0.775rem',
                 fontFamily: 'monospace',
                 overflowX: 'auto',
+                border: '1px solid rgba(14, 165, 233, 0.15)',
               }}
             >
               {JSON.stringify(event.event_metadata, null, 2)}
@@ -122,3 +127,5 @@ export const EventCard = ({ event }) => {
 };
 
 export default EventCard;
+
+

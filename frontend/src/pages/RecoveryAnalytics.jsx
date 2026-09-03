@@ -2,9 +2,9 @@ import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import GlassCard from '../components/common/GlassCard';
 import StatCard from '../components/common/StatCard';
-import LoadingSkeleton from '../components/common/LoadingSkeleton';
-import ErrorState from '../components/common/ErrorState';
-import EmptyState from '../components/common/EmptyState';
+import SkeletonLoader from '../components/ui/SkeletonLoader';
+import ErrorState from '../components/ui/ErrorState';
+import EmptyState from '../components/ui/EmptyState';
 import { Clock, Users, Zap, ShieldAlert } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -30,9 +30,9 @@ export const RecoveryAnalytics = () => {
     fetchRecovery();
   }, []);
 
-  if (loading) return <LoadingSkeleton count={3} />;
+  if (loading) return <SkeletonLoader type="cards" count={3} />;
   if (error) return <ErrorState message={error} onRetry={fetchRecovery} />;
-  if (!data) return <EmptyState title="No Recovery Data" message="Run a simulation to analyze recovery time after disruptions." />;
+  if (!data) return <EmptyState title="No Recovery Data" description="Run a workday simulation to analyze recovery time after disruptions." />;
 
   const developerList = data.developers || [];
   const totalRecoverySeconds = developerList.reduce((acc, dev) => acc + (dev.recovery_time_seconds || 0), 0);
@@ -44,12 +44,21 @@ export const RecoveryAnalytics = () => {
   }));
 
   return (
-    <div className="fade-in">
-      <div className="grid-3" style={{ marginBottom: '1.5rem' }}>
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+      <div>
+        <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#ffffff' }}>
+          Recovery Time <span className="gradient-text">Analytics</span>
+        </h1>
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+          Mental latency & focus restoration duration measured after interruptions.
+        </p>
+      </div>
+
+      <div className="grid-3">
         <StatCard
           label="Developers Processed"
           value={data.developer_count ?? developerList.length}
-          subtext="Population evaluated"
+          subtext="Simulated engineer count"
           icon={Users}
         />
         <StatCard
@@ -66,28 +75,30 @@ export const RecoveryAnalytics = () => {
         />
       </div>
 
-      <div className="grid-2" style={{ marginBottom: '1.5rem' }}>
+      <div className="grid-2">
         <GlassCard title="Recovery Time Breakdown (Minutes)" icon={Clock}>
           <div style={{ height: '250px', width: '100%' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
-                <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
-                <YAxis stroke="#64748b" fontSize={11} />
+                <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
                 <Tooltip
                   contentStyle={{
-                    background: 'rgba(255, 255, 255, 0.9)',
-                    backdropFilter: 'blur(10px)',
-                    borderRadius: '8px',
-                    border: '1px solid #e2e8f0',
+                    background: 'rgba(18, 20, 32, 0.95)',
+                    backdropFilter: 'blur(16px)',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#ffffff',
+                    boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
                   }}
                 />
-                <Bar dataKey="recoveryMin" fill="#06b6d4" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="recoveryMin" fill="#06b6d4" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </GlassCard>
 
-        <GlassCard title="Developer Recovery Time Roster" icon={ShieldAlert}>
+        <GlassCard title="Developer Recovery Time Telemetry" icon={ShieldAlert}>
           <div className="glass-table-container">
             <table className="glass-table">
               <thead>
@@ -107,7 +118,7 @@ export const RecoveryAnalytics = () => {
                         <span className="badge badge-indigo">Dev #{d.developer_id}</span>
                       </td>
                       <td>{d.events_analyzed}</td>
-                      <td style={{ fontWeight: 800, color: 'var(--primary-cyan)' }}>{min} min</td>
+                      <td style={{ fontWeight: 800, color: '#38bdf8' }}>{min} min</td>
                       <td>
                         <span className={`badge ${min > 20 ? 'badge-warning' : 'badge-success'}`}>
                           {min > 20 ? 'Slow Recovery' : 'Fast Resilience'}
@@ -126,3 +137,4 @@ export const RecoveryAnalytics = () => {
 };
 
 export default RecoveryAnalytics;
+

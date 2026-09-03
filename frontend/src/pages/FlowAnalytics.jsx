@@ -3,9 +3,9 @@ import api from '../services/api';
 import GlassCard from '../components/common/GlassCard';
 import StatCard from '../components/common/StatCard';
 import FlowGauge from '../components/common/FlowGauge';
-import LoadingSkeleton from '../components/common/LoadingSkeleton';
-import ErrorState from '../components/common/ErrorState';
-import EmptyState from '../components/common/EmptyState';
+import SkeletonLoader from '../components/ui/SkeletonLoader';
+import ErrorState from '../components/ui/ErrorState';
+import EmptyState from '../components/ui/EmptyState';
 import { Zap, Clock, Activity, Award } from 'lucide-react';
 import {
   AreaChart,
@@ -38,9 +38,9 @@ export const FlowAnalytics = () => {
     fetchFlow();
   }, []);
 
-  if (loading) return <LoadingSkeleton count={4} />;
+  if (loading) return <SkeletonLoader type="cards" count={4} />;
   if (error) return <ErrorState message={error} onRetry={fetchFlow} />;
-  if (!data) return <EmptyState title="No Flow Data" message="Run a simulation to generate flow session metrics." />;
+  if (!data) return <EmptyState title="No Flow Data" description="Run a workday simulation to generate flow session metrics." />;
 
   const chartData = [
     { hour: '10:00 AM', flow: 45 },
@@ -54,12 +54,21 @@ export const FlowAnalytics = () => {
   ];
 
   return (
-    <div className="fade-in">
-      <div className="grid-4" style={{ marginBottom: '1.5rem' }}>
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+      <div>
+        <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#ffffff' }}>
+          Flow <span className="gradient-text">Analytics Engine</span>
+        </h1>
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+          Deep focus interval telemetry & sustained flow state scoring from FastAPI.
+        </p>
+      </div>
+
+      <div className="grid-4">
         <StatCard
           label="Events Analyzed"
           value={data.events_analyzed ?? 0}
-          subtext="Total unified events"
+          subtext="Total unified telemetry events"
           icon={Activity}
         />
         <StatCard
@@ -82,17 +91,17 @@ export const FlowAnalytics = () => {
         />
       </div>
 
-      <div className="grid-3" style={{ gridTemplateColumns: '1fr 2fr', marginBottom: '1.5rem' }}>
+      <div className="grid-3" style={{ gridTemplateColumns: '1fr 2fr' }}>
         <GlassCard title="Flow Score Index" icon={Award}>
           <FlowGauge
             score={data.flow_score ?? 0}
             title="System Flow Quality"
-            description="Evaluated from raw event patterns"
+            description="Evaluated from raw telemetry event patterns"
           />
         </GlassCard>
 
         <GlassCard title="Flow Session Intensity Curve" icon={Zap}>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
             Simulated workday flow intensity (10:00 AM – 6:00 PM). Peak flow typically occurs during afternoon focus blocks.
           </p>
           <div style={{ height: '220px', width: '100%' }}>
@@ -100,21 +109,23 @@ export const FlowAnalytics = () => {
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="flowGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#0284c7" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.5} />
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="hour" stroke="#64748b" fontSize={11} />
-                <YAxis stroke="#64748b" fontSize={11} />
+                <XAxis dataKey="hour" stroke="#64748b" fontSize={11} tickLine={false} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
                 <Tooltip
                   contentStyle={{
-                    background: 'rgba(255, 255, 255, 0.9)',
-                    backdropFilter: 'blur(10px)',
-                    borderRadius: '8px',
-                    border: '1px solid #e2e8f0',
+                    background: 'rgba(18, 20, 32, 0.95)',
+                    backdropFilter: 'blur(16px)',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#ffffff',
+                    boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
                   }}
                 />
-                <Area type="monotone" dataKey="flow" stroke="#0284c7" strokeWidth={3} fillOpacity={1} fill="url(#flowGrad)" />
+                <Area type="monotone" dataKey="flow" stroke="#8b5cf6" strokeWidth={3} fillOpacity={1} fill="url(#flowGrad)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -125,3 +136,4 @@ export const FlowAnalytics = () => {
 };
 
 export default FlowAnalytics;
+

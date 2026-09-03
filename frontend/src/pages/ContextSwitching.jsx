@@ -2,11 +2,11 @@ import React, { useEffect, useState } from 'react';
 import api from '../services/api';
 import GlassCard from '../components/common/GlassCard';
 import StatCard from '../components/common/StatCard';
-import LoadingSkeleton from '../components/common/LoadingSkeleton';
-import ErrorState from '../components/common/ErrorState';
-import EmptyState from '../components/common/EmptyState';
+import SkeletonLoader from '../components/ui/SkeletonLoader';
+import ErrorState from '../components/ui/ErrorState';
+import EmptyState from '../components/ui/EmptyState';
 import { Shuffle, Users, Layers, Activity } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export const ContextSwitching = () => {
   const [data, setData] = useState(null);
@@ -30,9 +30,9 @@ export const ContextSwitching = () => {
     fetchContextSwitches();
   }, []);
 
-  if (loading) return <LoadingSkeleton count={3} />;
+  if (loading) return <SkeletonLoader type="cards" count={3} />;
   if (error) return <ErrorState message={error} onRetry={fetchContextSwitches} />;
-  if (!data) return <EmptyState title="No Context Switch Data" message="Run a simulation to detect tool and task transitions." />;
+  if (!data) return <EmptyState title="No Context Switch Data" description="Run a workday simulation to detect tool and task transitions." />;
 
   const developerList = data.developers || [];
   const totalSwitches = developerList.reduce((acc, dev) => acc + (dev.context_switches || 0), 0);
@@ -43,18 +43,27 @@ export const ContextSwitching = () => {
   }));
 
   return (
-    <div className="fade-in">
-      <div className="grid-3" style={{ marginBottom: '1.5rem' }}>
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+      <div>
+        <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#ffffff' }}>
+          Context-Switch <span className="gradient-text">Analytics</span>
+        </h1>
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+          Tool & task transition telemetry between IDE, Slack, Jira, and GitHub.
+        </p>
+      </div>
+
+      <div className="grid-3">
         <StatCard
           label="Total Developers"
           value={data.developer_count ?? developerList.length}
-          subtext="Monitored developers"
+          subtext="Monitored developer population"
           icon={Users}
         />
         <StatCard
           label="Total Context Switches"
           value={totalSwitches}
-          subtext="Transitions between IDE, Slack, Jira, GitHub"
+          subtext="Transitions between tools & tasks"
           icon={Shuffle}
         />
         <StatCard
@@ -65,28 +74,30 @@ export const ContextSwitching = () => {
         />
       </div>
 
-      <div className="grid-2" style={{ marginBottom: '1.5rem' }}>
+      <div className="grid-2">
         <GlassCard title="Context-Switch Frequency per Developer" icon={Shuffle}>
           <div style={{ height: '250px', width: '100%' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
-                <XAxis dataKey="name" stroke="#64748b" fontSize={11} />
-                <YAxis stroke="#64748b" fontSize={11} />
+                <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
+                <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} />
                 <Tooltip
                   contentStyle={{
-                    background: 'rgba(255, 255, 255, 0.9)',
-                    backdropFilter: 'blur(10px)',
-                    borderRadius: '8px',
-                    border: '1px solid #e2e8f0',
+                    background: 'rgba(18, 20, 32, 0.95)',
+                    backdropFilter: 'blur(16px)',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    color: '#ffffff',
+                    boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
                   }}
                 />
-                <Bar dataKey="switches" fill="#6366f1" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="switches" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </GlassCard>
 
-        <GlassCard title="Developer Context Switch Roster" icon={Activity}>
+        <GlassCard title="Developer Context Switch Telemetry" icon={Activity}>
           <div className="glass-table-container">
             <table className="glass-table">
               <thead>
@@ -104,7 +115,7 @@ export const ContextSwitching = () => {
                       <span className="badge badge-indigo">Dev #{d.developer_id}</span>
                     </td>
                     <td>{d.events_analyzed}</td>
-                    <td style={{ fontWeight: 800, color: 'var(--accent-indigo)' }}>{d.context_switches}</td>
+                    <td style={{ fontWeight: 800, color: '#a78bfa' }}>{d.context_switches}</td>
                     <td>
                       <span className={`badge ${d.context_switches > 10 ? 'badge-warning' : 'badge-success'}`}>
                         {d.context_switches > 10 ? 'High Switching' : 'Stable Context'}
@@ -122,3 +133,4 @@ export const ContextSwitching = () => {
 };
 
 export default ContextSwitching;
+
