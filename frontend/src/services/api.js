@@ -25,7 +25,7 @@ export const api = {
       const response = await client.get('/');
       return response.data;
     } catch (error) {
-      return { name: 'CogniFlow', version: '1.0.0', status: 'offline' };
+      handleApiError(error, 'Failed to reach the CogniFlow backend.');
     }
   },
 
@@ -35,7 +35,7 @@ export const api = {
       const response = await client.get('/health');
       return response.data;
     } catch (error) {
-      return { status: 'unhealthy', database: 'unavailable' };
+      handleApiError(error, 'Failed to check CogniFlow backend health.');
     }
   },
 
