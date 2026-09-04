@@ -59,6 +59,8 @@ from app.core.config import settings
 from app.core.database import (
     check_database_connection,
     close_database,
+    ensure_database_ready,
+    get_db_dialect,
 )
 
 
@@ -75,8 +77,8 @@ async def lifespan(
     Manage CogniFlow application startup and shutdown.
 
     Startup:
-        Validate the application configuration and check the
-        PostgreSQL connection.
+        Validate application configuration, ensure database tables exist,
+        and seed initial demo data if needed.
 
     Shutdown:
         Dispose the SQLAlchemy database engine.
@@ -84,13 +86,13 @@ async def lifespan(
 
     settings.validate()
 
-    # The database is required by the backend.
-    # Do not automatically create tables here.
-    # Database schema management is handled by Alembic.
+    # Ensure database readiness and seed if empty
+    ensure_database_ready()
+
     if not check_database_connection():
         raise RuntimeError(
-            "CogniFlow could not connect to PostgreSQL. "
-            "Check DATABASE_URL and make sure PostgreSQL is running."
+            "CogniFlow could not connect to database. "
+            "Check DATABASE_URL or environment settings."
         )
 
     yield
@@ -204,6 +206,7 @@ def root() -> dict[str, str]:
         "name": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "status": "running",
+        "database_dialect": get_db_dialect(),
     }
 
 
@@ -220,7 +223,7 @@ def health_check() -> dict[str, object]:
     """
     Return API and database health status.
 
-    The API is considered healthy only when PostgreSQL is
+    The API is considered healthy when PostgreSQL or SQLite is
     reachable.
     """
 
@@ -237,4 +240,5 @@ def health_check() -> dict[str, object]:
             if database_healthy
             else "unavailable"
         ),
-    }
+        "dialect": get_db_dialect(),
+    }

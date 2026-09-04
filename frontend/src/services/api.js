@@ -13,6 +13,21 @@ const client = axios.create({
 
 // Helper for error formatting
 const handleApiError = (error, fallbackMessage) => {
+  const isOffline =
+    error.response?.status === 503 ||
+    error.code === 'ERR_NETWORK' ||
+    error.code === 'ECONNREFUSED' ||
+    error.message?.includes('Network Error');
+
+  if (isOffline) {
+    console.warn('[API Warning] Backend service is offline or unreachable.');
+    const offlineError = new Error(
+      'Backend server is offline (http://127.0.0.1:8000). Please start the Python backend service.'
+    );
+    offlineError.isBackendOffline = true;
+    throw offlineError;
+  }
+
   console.error('[API Error]:', error);
   const detail = error.response?.data?.detail || error.message || fallbackMessage;
   throw new Error(detail);
@@ -35,7 +50,7 @@ export const api = {
       const response = await client.get('/health');
       return response.data;
     } catch (error) {
-      return { status: 'unhealthy', database: 'unavailable' };
+      return { status: 'offline', database: 'unavailable', dialect: 'none' };
     }
   },
 

@@ -1,0 +1,14 @@
+{
+  "name": "cogniflow",
+  "version": "1.0.0",
+  "description": "CogniFlow - Developer Flow-State and Workflow Analytics Platform",
+  "scripts": {
+    "dev": "concurrently -n \"BACKEND,FRONTEND\" -c \"cyan,magenta\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload",
+    "dev:frontend": "cd frontend && npm run dev",
+    "seed": "cd backend && python -c \"from app.core.database import SessionLocal; from app.seed.seed_teams import seed_teams; from app.seed.seed_developers import seed_developers; from app.seed.seed_tasks import seed_tasks; db=SessionLocal(); seed_teams(db); seed_developers(db); seed_tasks(db); db.close()\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

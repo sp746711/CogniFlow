@@ -363,24 +363,37 @@ This structure is a planned implementation layer and should be treated as a scaf
 
 ## Running the project
 
-### Backend
+### Quick Start (One Command for Both Backend & Frontend)
+
+From the root directory:
+
+```bash
+npm install
+npm run dev
+```
+
+This starts:
+- **Backend**: FastAPI API server on `http://127.0.0.1:8000`
+- **Frontend**: Vite React UI on `http://127.0.0.1:5173`
+
+> **Note on Database**: CogniFlow automatically connects to PostgreSQL if available via `DATABASE_URL`. If PostgreSQL is not running locally during development, it automatically falls back to an embedded SQLite database (`cogniflow_dev.db`) and seeds initial demo data automatically.
+
+### Running Components Individually
+
+#### Backend Only
 
 ```bash
 cd backend
-python -m uvicorn app.main:app --reload
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-This requires PostgreSQL to be running and configured through the backend environment settings.
-
-### Frontend
+#### Frontend Only
 
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-
-This is a planned frontend workflow for the current scaffold. It is not yet a complete UI implementation.
 
 ---
 

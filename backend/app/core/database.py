@@ -122,17 +122,41 @@ DATABASE_URL = _get_sync_database_url(
     settings.DATABASE_URL
 )
 
-
-# ==============================================================
-# DATABASE ENGINE
-# ==============================================================
+# Active dialect tracking ('postgresql' or 'sqlite')
+CURRENT_DB_DIALECT = "postgresql"
 
 
-engine: Engine = create_engine(
-    DATABASE_URL,
-    echo=settings.DEBUG,
-    pool_pre_ping=True,
-)
+def _create_db_engine(url: str) -> Engine:
+    """
+    Helper to create engine with appropriate kwargs depending on dialect.
+    """
+    if url.startswith("sqlite"):
+        return create_engine(
+            url,
+            echo=settings.DEBUG,
+            connect_args={"check_same_thread": False},
+        )
+    return create_engine(
+        url,
+        echo=settings.DEBUG,
+        pool_pre_ping=True,
+    )
+
+
+# Primary engine creation
+try:
+    engine: Engine = _create_db_engine(DATABASE_URL)
+    # Test primary engine connection
+    with engine.connect() as _conn:
+        _conn.execute(text("SELECT 1"))
+except Exception as psql_err:
+    # If in development or postgresql unreachable, fallback to SQLite
+    sqlite_url = "sqlite:///./cogniflow_dev.db"
+    print(f"[CogniFlow DB Warning] Could not connect to PostgreSQL ({psql_err}).")
+    print(f"[CogniFlow DB Info] Falling back to SQLite database at {sqlite_url}")
+    DATABASE_URL = sqlite_url
+    CURRENT_DB_DIALECT = "sqlite"
+    engine = _create_db_engine(DATABASE_URL)
 
 
 # ==============================================================
@@ -147,6 +171,11 @@ SessionLocal = sessionmaker(
     autoflush=False,
     expire_on_commit=False,
 )
+
+
+def get_db_dialect() -> str:
+    """Return the active database dialect name ('postgresql' or 'sqlite')."""
+    return CURRENT_DB_DIALECT
 
 
 # ==============================================================
@@ -185,7 +214,7 @@ def get_db() -> Generator[Session, None, None]:
 
 def check_database_connection() -> bool:
     """
-    Check whether PostgreSQL is reachable.
+    Check whether the active database is reachable.
 
     Returns:
         True when the database responds successfully.
@@ -248,6 +277,38 @@ def create_database_tables() -> None:
 
 
 # ==============================================================
+# AUTOMATIC SCHEMA & SEED HELPER (FOR DEV/FALLBACK)
+# ==============================================================
+
+
+def ensure_database_ready() -> None:
+    """
+    Ensure database tables exist and seed initial demo data if empty.
+    """
+    create_database_tables()
+
+    # Check if teams table has data
+    db = SessionLocal()
+    try:
+        from app.models.team import Team
+        team_count = db.query(Team).count()
+        if team_count == 0:
+            print("[CogniFlow DB Info] Database is empty. Seeding initial demo data...")
+            from app.seed.seed_teams import seed_teams
+            from app.seed.seed_developers import seed_developers
+            from app.seed.seed_tasks import seed_tasks
+
+            seed_teams(db)
+            seed_developers(db)
+            seed_tasks(db)
+            print("[CogniFlow DB Info] Database seeding completed successfully.")
+    except Exception as err:
+        print(f"[CogniFlow DB Warning] Database readiness check note: {err}")
+    finally:
+        db.close()
+
+
+# ==============================================================
 # DATABASE SESSION HEALTH CHECK
 # ==============================================================
 
@@ -257,10 +318,10 @@ def verify_database() -> None:
     Verify the database connection.
 
     Raises:
-        RuntimeError: when PostgreSQL cannot be reached.
+        RuntimeError: when database cannot be reached.
     """
 
     if not check_database_connection():
         raise RuntimeError(
-            "CogniFlow could not connect to the PostgreSQL database."
-        )
+            "CogniFlow could not connect to the database."
+        )

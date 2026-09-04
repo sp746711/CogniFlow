@@ -12,6 +12,39 @@ export const Navbar = ({ title = 'Dashboard' }) => {
   } = useApp();
 
   const isHealthy = systemHealth.status === 'healthy' && systemHealth.database === 'connected';
+  const isOffline = systemHealth.status === 'offline';
+  const dialect = systemHealth.dialect || 'unknown';
+
+  const getBadgeConfig = () => {
+    if (isOffline) {
+      return {
+        className: 'badge-danger',
+        icon: <AlertCircle size={14} />,
+        label: 'Backend Offline (Port 8000)',
+      };
+    }
+    if (isHealthy) {
+      if (dialect === 'sqlite') {
+        return {
+          className: 'badge-warning',
+          icon: <Database size={14} />,
+          label: 'SQLite Dev DB',
+        };
+      }
+      return {
+        className: 'badge-success',
+        icon: <CheckCircle2 size={14} />,
+        label: 'PostgreSQL Active',
+      };
+    }
+    return {
+      className: 'badge-danger',
+      icon: <AlertCircle size={14} />,
+      label: 'DB Disconnected',
+    };
+  };
+
+  const badge = getBadgeConfig();
 
   return (
     <header
@@ -41,12 +74,12 @@ export const Navbar = ({ title = 'Dashboard' }) => {
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
         {/* System Health Badge */}
         <div
-          className={`badge ${isHealthy ? 'badge-success' : 'badge-danger'}`}
+          className={`badge ${badge.className}`}
           style={{ padding: '0.4rem 0.75rem', gap: '0.4rem' }}
-          title={`Status: ${systemHealth.status}, DB: ${systemHealth.database}`}
+          title={`Status: ${systemHealth.status}, DB: ${systemHealth.database}, Dialect: ${dialect}`}
         >
-          {isHealthy ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}
-          <span>{isHealthy ? 'PostgreSQL Active' : 'DB Disconnected'}</span>
+          {badge.icon}
+          <span>{badge.label}</span>
         </div>
 
         {/* Date Selector */}
